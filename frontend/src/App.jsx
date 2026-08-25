@@ -10,6 +10,22 @@ import { blankDoc, migrate } from "./model.js";
 import Canvas from "./components/Canvas.jsx";
 import { Reports, Settings } from "./components/Views.jsx";
 
+/* Single sign-on from the admin portal: embedded in an iframe, the portal
+   mints a short-lived token server-side (it holds the real login, never
+   shipped to the browser) and hands it over as ?sso_token=. Consumed once
+   on first render, then stripped from the URL so it never lingers in
+   history — after that this behaves exactly like a normal signed-in
+   session (sessionStorage-backed, same as a manual login). */
+function consumeSsoToken() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("sso_token");
+  if (!token) return;
+  setToken(token);
+  params.delete("sso_token");
+  const rest = params.toString();
+  window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+}
+
 export default function App() {
   return (
     <StoreProvider>
@@ -20,7 +36,10 @@ export default function App() {
 
 function Shell() {
   const { state, dispatch } = useStore();
-  const [signedIn, setSignedIn] = React.useState(hasToken());
+  const [signedIn, setSignedIn] = React.useState(() => {
+    consumeSsoToken();
+    return hasToken();
+  });
   const [saveMsg, setSaveMsg] = React.useState("");
 
   React.useEffect(() => {
