@@ -1,0 +1,2605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NexD Designer v5</title>
+<style>
+:root{
+  --ink:#10161A; --ink2:#1B2529; --paper:#EEF2F1; --panel:#FFFFFF;
+  --line:#D5DDDA; --line-soft:#E7ECEA; --text:#1A2326; --muted:#6B7A78;
+  --oxide:#0D6E62; --oxide-soft:#E0EFEC; --amber:#96610A; --amber-soft:#F6EEDC;
+  --iron:#9E332B; --iron-soft:#F6E5E3; --blue:#3B5BA5;
+  --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--sans);background:var(--paper);color:var(--text);font-size:14px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--oxide);outline-offset:2px}
+h1,h2,h3,h4{font-weight:600;margin:0}
+.mono{font-family:var(--mono)}
+[hidden]{display:none !important}
+
+/* ---------- shared segmented control ---------- */
+.seg{display:flex;border:1px solid #33403E;border-radius:2px;overflow:hidden}
+.seg button{background:none;border:none;color:#93A2A0;font-size:12.5px;padding:6px 15px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--oxide);color:#fff}
+
+/* ---------- page ---------- */
+.pane{max-width:1400px;margin:0 auto;padding:26px 20px 120px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:26px 28px 34px}
+
+/* ---------- inline editables ---------- */
+[contenteditable]{outline:none;border-radius:2px;transition:background .12s,box-shadow .12s}
+body.design [contenteditable]:hover{background:var(--oxide-soft)}
+body.design [contenteditable]:focus{background:#fff;box-shadow:0 0 0 2px var(--oxide)}
+[contenteditable]:empty::before{content:attr(data-ph);color:#A9B6B4;font-weight:400}
+
+/* ---------- report heading ---------- */
+.rep-name-wrap{position:relative;padding-bottom:13px;margin-bottom:17px;border-bottom:1px solid var(--line)}
+.rep-name-wrap.sel{border-bottom-color:var(--oxide)}
+.rep-name{font-size:24px;font-weight:600;line-height:1.25;min-height:1.2em}
+
+/* ---------- filter bar ---------- */
+.fbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;
+  background:#F7F9F8;border:1px solid var(--line);border-radius:3px;padding:12px 14px;margin-bottom:20px}
+.fchip{position:relative;min-width:150px;background:var(--panel);border:1px solid var(--line);
+  border-radius:2px;padding:7px 9px 8px}
+.fchip.sel{border-color:var(--oxide);box-shadow:0 0 0 2px var(--oxide-soft)}
+.fchip-top{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.fname{font-size:12.5px;color:var(--text);min-width:30px;line-height:1.35}
+.fcolon{font-size:12.5px;color:var(--text);margin-left:-4px;flex:0 0 auto}
+body.preview .fcolon{margin-left:-4px}
+.fgear{border:none;background:none;cursor:pointer;color:#A9B6B4;font-size:12px;padding:0 2px;line-height:1}
+.fgear:hover{color:var(--oxide)}
+.fchip input[type=text],.fchip input[type=date],.fchip input[type=number],.fchip select{
+  width:100%;font-size:12.5px;padding:5px 7px;border:1px solid var(--line);border-radius:2px;background:#fff}
+.fchip .pair{display:flex;gap:5px}
+.fchip.w-narrow{min-width:118px;max-width:160px}
+.fchip.w-auto{min-width:150px}
+.fchip.w-wide{min-width:250px}
+.fchip.w-full{flex:1 0 100%}
+
+.ftools{position:absolute;top:-12px;right:5px;display:flex;align-items:center;background:var(--ink);
+  border-radius:3px;box-shadow:0 2px 7px rgba(16,22,26,.24);opacity:0;transition:opacity .12s;z-index:18}
+.fchip:hover .ftools,.fchip.sel .ftools{opacity:1}
+.ftools button{background:none;border:none;color:#B6C3C1;font-size:11px;padding:4px 7px;cursor:pointer;
+  line-height:1.3;white-space:nowrap}
+.ftools button:hover{background:#243130;color:#fff}
+.ftools button[aria-pressed="true"]{background:var(--oxide);color:#fff}
+.ftools button.warn:hover{background:var(--iron);color:#fff}
+.ftools .sp{width:1px;background:#2C3937;align-self:stretch}
+.fpos{font-family:var(--mono);font-size:10px;color:#7FC4B7;padding:0 3px;min-width:12px;text-align:center}
+body.preview .ftools{display:none}
+
+.fbody{display:flex;gap:6px;min-width:0}
+.fbody.pos-top,.fbody.pos-hidden{flex-direction:column;gap:4px}
+.fbody.pos-left{flex-direction:row;align-items:center;flex-wrap:wrap}
+.fbody.pos-right{flex-direction:row-reverse;align-items:center;flex-wrap:wrap-reverse;justify-content:flex-end}
+.fbody.pos-left>.fname,.fbody.pos-right>.fname{flex:0 0 auto;max-width:45%}
+.fbody.pos-left>.fctrl,.fbody.pos-right>.fctrl{flex:1 1 90px;min-width:0}
+.fbody>.fctrl{min-width:0}
+.lbl-hidden{opacity:.4;text-decoration:line-through}
+body.preview .lbl-hidden{display:none}
+
+.fctrl>input,.fctrl>select{font:inherit;color:inherit}
+.fctrl .opts label{font:inherit;color:inherit}
+.opts{display:flex;flex-wrap:wrap;gap:4px 12px;padding-top:2px}
+.opts label{display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.opts input{margin:0;accent-color:var(--oxide)}
+.fbar-add{align-self:center}
+
+/* ---------- sections ---------- */
+.sec{margin-bottom:30px;position:relative;border-radius:3px}
+.sec.framed{margin-bottom:26px}
+.sec>.sectools{top:-12px;right:6px;opacity:0;transition:opacity .12s}
+.sec:hover>.sectools,.sec.sel>.sectools{opacity:1}
+.sec.sel{box-shadow:0 0 0 2px var(--oxide-soft)}
+.tlabel{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+  color:#7FC4B7;padding:0 9px 0 10px;align-self:center}
+body.preview .sectools{display:none}
+.box.framed{border-color:transparent}
+.sec-head.lbl-hidden .sec-name,.sec-desc.lbl-hidden{opacity:.4;text-decoration:line-through}
+body.preview .sec-head.lbl-hidden{display:none}
+.secidx{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:#A9B6B4;margin-bottom:3px}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+.sec-name{font-size:16px;font-weight:600}
+.sec-desc{color:var(--muted);font-size:12.5px;margin-bottom:11px}
+.sec-rule{height:2px;background:var(--oxide);width:34px;margin-bottom:12px;border-radius:2px}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+
+/* ---------- boxes ---------- */
+.box{position:relative;border:1px solid var(--line);border-left:3px solid var(--oxide);
+  border-radius:3px;background:var(--panel);padding:13px 15px 14px;min-height:76px}
+.box.boxoff{opacity:.42}
+body.preview .box.boxoff{display:none}
+
+.btools{position:absolute;top:-13px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:20}
+.btools button{width:27px;height:25px;border:1px solid var(--line);background:var(--panel);
+  border-radius:3px;cursor:pointer;color:var(--muted);font-size:12px;line-height:1;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(16,22,26,.10)}
+.btools button:hover{border-color:var(--oxide);color:var(--oxide)}
+.btools button[aria-pressed="true"]{background:var(--oxide);border-color:var(--oxide);color:#fff}
+.btools button.warn:hover{background:var(--iron);border-color:var(--iron);color:#fff}
+body.preview .btools{display:none}
+
+.addbox{display:block;width:100%;margin-top:14px;padding:15px 18px;border:1px dashed var(--line);
+  border-radius:3px;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;text-align:center}
+.addbox:hover{border-color:var(--oxide);border-style:solid;color:var(--oxide);background:var(--panel)}
+
+.swblock{border-top:1px solid var(--line-soft);margin:6px 0 2px}
+.swrow{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 1px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.swrow>span:first-child{font-size:12.5px;color:var(--text)}
+.sw{position:relative;width:38px;height:21px;flex:0 0 38px}
+.sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:2;width:100%;height:100%}
+.sw i{position:absolute;inset:0;background:#C9D4D2;border-radius:11px;transition:background .15s;display:block}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:left .15s}
+.sw input:checked+i{background:var(--oxide)}
+.sw input:checked+i::after{left:20px}
+
+.segbar{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.segbar button{flex:1;background:var(--panel);border:none;border-right:1px solid var(--line);
+  padding:11px 6px;font-size:12.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.segbar button:last-child{border-right:none}
+.segbar button:hover{color:var(--oxide)}
+.segbar button[aria-pressed="true"]{background:var(--oxide);color:#fff;font-weight:600}
+body.design .box:hover{border-color:#AFC0BC}
+.box.sel{border-color:var(--oxide);box-shadow:0 0 0 2px var(--oxide-soft)}
+.box-title{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px;padding-right:20px}
+.kpi{font-size:31px;font-weight:600;line-height:1.1;letter-spacing:-.01em}
+.kpi-unit{font-size:12.5px;color:var(--muted);font-weight:400;margin-left:5px;letter-spacing:0}
+.kpi-delta{font-size:12px;margin-top:5px;display:inline-flex;align-items:center;gap:4px}
+.kpi-delta.up{color:var(--oxide)} .kpi-delta.down{color:var(--iron)} .kpi-delta.flat{color:var(--muted)}
+.kpi-note{font-size:11.5px;color:var(--muted);margin-top:6px}
+.track{height:5px;background:var(--line-soft);border-radius:3px;margin-top:9px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--oxide);border-radius:3px}
+
+table.rt{width:100%;border-collapse:collapse;font-size:12.5px}
+table.rt th{text-align:left;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);font-weight:400;padding:6px 8px;
+  border-bottom:1px solid var(--line);white-space:nowrap;background:#F7F9F8}
+table.rt td{padding:6px 8px;border-bottom:1px solid var(--line-soft)}
+table.rt tbody tr.z{background:#FAFBFB}
+table.rt tr.ghost td{color:#BFCAC8}
+table.rt td.ghost-note{text-align:center;color:#A9B6B4;font-size:11px;font-family:var(--mono);
+  padding:9px 8px;border-bottom:none}
+table.rt tfoot td{font-weight:600;border-top:1px solid var(--line);border-bottom:none;background:#F7F9F8}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.note-body{font-size:13px;line-height:1.6}
+.note-body b{font-weight:600}
+
+.empty{border:1px dashed var(--line);border-radius:3px;padding:26px 18px;text-align:center;color:var(--muted);font-size:13px}
+.chart-wrap{width:100%}
+.chartwrap{display:flex;min-width:0}
+.chartwrap.lp-bottom{flex-direction:column}
+.chartwrap.lp-top{flex-direction:column-reverse}
+.chartwrap.lp-right{flex-direction:row;align-items:center;gap:12px}
+.chartsvg{flex:1;min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.legend.col{flex-direction:column;flex-wrap:nowrap;gap:5px;margin-top:0;flex:0 0 auto;max-width:40%}
+.lp-top>.legend{margin:0 0 9px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+
+/* ---------- in-place toolbar ---------- */
+.tools{position:absolute;top:-13px;right:8px;display:flex;gap:0;z-index:20;
+  background:var(--ink);border-radius:3px;box-shadow:0 3px 10px rgba(16,22,26,.22);overflow:hidden}
+.tools button{background:none;border:none;color:#B6C3C1;font-size:11.5px;padding:5px 8px;cursor:pointer;
+  border-right:1px solid #2C3937;white-space:nowrap;line-height:1.3}
+.tools button:last-child{border-right:none}
+.tools button:hover{background:#243130;color:#fff}
+.tools button[aria-pressed="true"]{background:var(--oxide);color:#fff}
+.tools button.warn:hover{background:var(--iron);color:#fff}
+.tools .sp{width:1px;background:#2C3937}
+
+/* ---------- in-place config panel ---------- */
+.cfg{margin-top:11px;border:1px solid var(--oxide);border-radius:3px;background:#FBFDFC;padding:11px 12px}
+.cfg-tabs{display:flex;gap:0;margin:-11px -12px 10px;border-bottom:1px solid var(--line)}
+.cfg-tabs button{flex:1;background:#F2F6F5;border:none;border-right:1px solid var(--line);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  padding:8px 6px;cursor:pointer}
+.cfg-tabs button:last-child{border-right:none}
+.cfg-tabs button[aria-pressed="true"]{background:#fff;color:var(--oxide);box-shadow:inset 0 -2px 0 var(--oxide)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-bottom:9px}
+.fld label{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:3px}
+.fld input,.fld select,.fld textarea{width:100%;font-size:12px;padding:5px 7px;border:1px solid var(--line);
+  border-radius:2px;background:#fff}
+.fld textarea{min-height:54px;resize:vertical;font-family:var(--mono);font-size:11.5px}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--oxide);box-shadow:0 0 0 2px var(--oxide-soft);outline:none}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips button{font-size:11.5px;padding:4px 9px;border:1px solid var(--line);background:#fff;
+  border-radius:2px;cursor:pointer;color:var(--muted)}
+.chips button[aria-pressed="true"]{border-color:var(--oxide);background:var(--oxide);color:#fff}
+.chips button:hover{border-color:var(--oxide)}
+.swatches{display:flex;flex-wrap:wrap;gap:4px}
+.swatches button{width:19px;height:19px;border-radius:2px;border:1px solid rgba(0,0,0,.18);cursor:pointer;padding:0}
+.swatches button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--oxide);border-color:#fff}
+.toggles{display:flex;flex-wrap:wrap;gap:5px 14px;margin-bottom:8px}
+.toggles label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)}
+.toggles input{accent-color:var(--oxide);margin:0}
+.hint{font-size:11px;color:var(--muted);margin-top:5px}
+.grp{margin:12px 0 7px;padding-top:9px;border-top:1px solid var(--line-soft);font-family:var(--mono);
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.grp:first-child{margin-top:0;padding-top:0;border-top:none}
+.collist{border:1px solid var(--line);border-radius:2px;background:#fff;max-height:210px;overflow:auto}
+.colrow{display:grid;grid-template-columns:26px 22px 1fr 88px 62px 54px;gap:6px;align-items:center;
+  padding:5px 8px;border-bottom:1px solid var(--line-soft)}
+.colmv{display:flex;flex-direction:column;gap:2px}
+.colmv .xbtn{padding:0;font-size:9px;line-height:1.1}
+.colrow:last-child{border-bottom:none}
+.colrow input[type=checkbox]{accent-color:var(--oxide)}
+.colrow input[type=text],.colrow select{font-size:11.5px;padding:3px 5px;border:1px solid var(--line);border-radius:2px;width:100%}
+.colrow .cn{font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+/* ---------- add bar ---------- */
+.addbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.add{font-size:12px;padding:6px 12px;border:1px dashed var(--line);background:#fff;border-radius:2px;
+  cursor:pointer;color:var(--muted)}
+.add:hover{border-color:var(--oxide);border-style:solid;color:var(--oxide)}
+.add.big{padding:9px 16px;font-size:12.5px}
+.secadd{margin-top:6px}
+
+/* ---------- misc ---------- */
+.badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 6px;border-radius:2px;background:var(--line-soft);color:var(--muted)}
+.badge.live{background:var(--oxide-soft);color:var(--oxide)}
+body.preview .tools,body.preview .add,body.preview .addbar,body.preview .cfg,
+body.preview .fgear,body.preview .secadd{display:none !important}
+body.preview [contenteditable]{pointer-events:none}
+.srcbar{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:-4px 0 8px;font-size:10.5px;
+  font-family:var(--mono);color:var(--muted)}
+.srcbar b{font-weight:500;color:var(--oxide)}
+.srcbar em{font-style:normal;color:#A9B6B4}
+body.preview .srcbar{display:none}
+
+.danger{margin-top:11px;padding:10px 11px;border:1px solid var(--iron);border-radius:3px;background:var(--iron-soft)}
+.danger p{margin:0 0 8px;font-size:12.5px;color:#6E241E}
+.danger .btns{display:flex;gap:7px;flex-wrap:wrap}
+.dbtn{font-size:12px;padding:6px 13px;border-radius:2px;cursor:pointer;border:1px solid var(--iron);
+  background:var(--iron);color:#fff}
+.dbtn.cancel{background:#fff;color:var(--muted);border-color:var(--line)}
+.delbtn{width:100%;font-size:12px;padding:7px 12px;border:1px solid var(--iron);background:#fff;
+  color:var(--iron);border-radius:2px;cursor:pointer;margin-top:4px}
+.delbtn:hover{background:var(--iron);color:#fff}
+
+.joinrow,.wherow{display:grid;gap:5px;align-items:center;padding:6px 7px;border:1px solid var(--line);
+  border-radius:2px;background:#fff;margin-bottom:5px}
+.joinrow{grid-template-columns:74px 1fr 12px 1fr 1fr 26px}
+.wherow{grid-template-columns:58px 1fr 96px 1fr 26px}
+.joinrow select,.joinrow input,.wherow select,.wherow input{font-size:11.5px;padding:4px 5px;
+  border:1px solid var(--line);border-radius:2px;width:100%;background:#fff}
+.joinrow .eq{text-align:center;color:var(--muted);font-size:11px}
+.xbtn{border:1px solid var(--line);background:#fff;color:var(--iron);border-radius:2px;cursor:pointer;
+  font-size:11px;padding:3px 0;line-height:1.2}
+.xbtn:hover{background:var(--iron);color:#fff;border-color:var(--iron)}
+.sqlbox{background:#141C1F;color:#CFE0DC;border-radius:3px;padding:10px 12px;font-family:var(--mono);
+  font-size:11px;line-height:1.65;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:230px;margin-top:4px}
+.sqlbox .kw{color:#6FBFAF}
+.sqlbox .cm{color:#7C8F8C;font-style:italic}
+.sqlbox .st{color:#D9A85C}
+.rowcount{font-size:11px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+.fx{font-size:11.5px;padding:6px 9px;border-radius:2px;margin-top:6px;line-height:1.45}
+.fx.ok{background:var(--oxide-soft);color:#0B4E45}
+.fx.bad{background:var(--iron-soft);color:#6E241E}
+
+/* ---------- page chrome: no rail, just buttons on the page ---------- */
+.wordmark{display:flex;align-items:baseline;gap:9px;margin-bottom:14px}
+.wordmark b{font-family:var(--mono);font-size:14px;letter-spacing:.22em;font-weight:500;color:var(--ink)}
+.wordmark span{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.pagebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.pb{background:var(--panel);border:1px solid var(--line);color:var(--text);font-size:12.5px;
+  padding:8px 16px;border-radius:2px;cursor:pointer;white-space:nowrap}
+.pb:hover{border-color:var(--oxide);color:var(--oxide)}
+.pb[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
+.pb.go{background:var(--oxide);border-color:var(--oxide);color:#fff;font-weight:600}
+.pb.go:hover{background:#0B5C52;color:#fff}
+.pb.live{background:var(--panel);border-color:var(--oxide);color:var(--oxide);font-weight:400}
+.pbsep{width:1px;height:22px;background:var(--line);margin:0 3px}
+.hcard{background:var(--panel);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.hcard>header{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 18px;border-bottom:1px solid var(--line);background:#F7F9F8}
+.hcard>header h2{font-size:14.5px}
+.hcard>footer{display:flex;gap:16px;padding:11px 18px;border-top:1px solid var(--line-soft);background:#FCFDFD}
+.prim{background:var(--oxide);border:1px solid var(--oxide);color:#fff;font-size:12.5px;
+  padding:7px 16px;border-radius:2px;cursor:pointer;white-space:nowrap}
+.prim:hover{background:#0B5C52}
+.prim.ghost{background:#fff;color:var(--oxide)}
+.prim.ghost:hover{background:var(--oxide-soft)}
+.link{background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline}
+.link:hover{color:var(--oxide)}
+
+.ritem{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line-soft)}
+.ritem:last-child{border-bottom:none}
+.ritem .rmain{flex:1;min-width:0}
+.ritem .rname{font-size:13.5px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ritem .rmeta{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.ritem .racts{display:flex;gap:6px;flex-wrap:wrap}
+.sbtn{font-size:11.5px;padding:5px 11px;border:1px solid var(--line);background:#fff;border-radius:2px;
+  cursor:pointer;color:var(--muted);white-space:nowrap}
+.sbtn:hover{border-color:var(--oxide);color:var(--oxide)}
+.sbtn.warn{color:var(--iron)}
+.sbtn.warn:hover{border-color:var(--iron);background:var(--iron);color:#fff}
+.pill{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  padding:2px 6px;border-radius:2px;background:var(--line-soft);color:var(--muted);margin-left:7px}
+.pill.on{background:var(--oxide-soft);color:var(--oxide)}
+.nothing{padding:30px 18px;text-align:center;color:var(--muted);font-size:13px}
+
+.conn{border-bottom:1px solid var(--line-soft)}
+.conn:last-of-type{border-bottom:none}
+.conn-top{display:flex;align-items:center;gap:10px;padding:12px 18px;cursor:pointer}
+.conn-top:hover{background:#FAFBFB}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.dot.ok{background:var(--oxide)} .dot.bad{background:var(--iron)} .dot.warn{background:var(--amber)}
+.conn-nm{flex:1;font-size:13px;font-weight:600;min-width:0}
+.conn-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.conn-body{padding:4px 18px 16px;background:#FBFDFC;border-top:1px solid var(--line-soft)}
+.tbl{border:1px solid var(--line);border-radius:2px;background:#fff;margin-bottom:6px}
+.tbl-top{display:flex;align-items:center;gap:10px;padding:8px 11px;cursor:pointer}
+.tbl-top:hover{background:#FAFBFB}
+.tbl-body{padding:8px 11px 12px;border-top:1px solid var(--line-soft);background:#FBFDFC}
+.ph{border:1px dashed var(--line);border-radius:3px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:3px;padding:18px 12px;text-align:center;min-height:64px}
+.ph b{font-size:12.5px;font-weight:600;color:var(--muted)}
+.ph span{font-size:11.5px;color:#A9B6B4}
+.defs{padding:14px 18px;border-top:1px solid var(--line);background:#F7F9F8}
+
+.sstate{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.espacer{flex:1}
+.pubbar{background:var(--oxide-soft);border:1px solid #BFDDD7;border-radius:3px;padding:9px 14px;margin-bottom:16px;
+  font-size:12.5px;color:#0B4E45;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.pubbar code{font-family:var(--mono);font-size:11.5px;background:#fff;border:1px solid #BFDDD7;
+  padding:3px 7px;border-radius:2px;word-break:break-all}
+
+#vReports .rname[contenteditable]{display:inline-block;min-width:60px}
+#vReports .rname[contenteditable]:hover{background:var(--oxide-soft);border-radius:2px}
+#vReports .rname[contenteditable]:focus{background:#fff;box-shadow:0 0 0 2px var(--oxide);
+  border-radius:2px;outline:none}
+.help{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;
+  background:var(--oxide-soft);border:1px solid #BFDDD7;border-radius:3px;
+  padding:9px 12px;margin-bottom:14px;font-size:12.5px;color:#0B4E45;line-height:1.5}
+.help b{font-weight:600}
+.help button{background:none;border:none;color:#4E8C82;cursor:pointer;font-size:13px;padding:0 2px;line-height:1}
+.help button:hover{color:#0B4E45}
+body.preview .help{display:none}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;
+  font-size:12.5px;padding:9px 16px;border-radius:3px;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+@media(max-width:820px){.grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}.sheet{padding:18px 15px 26px}}
+</style>
+</head>
+<body class="design">
+
+<div class="pane">
+
+  <div class="wordmark"><b>NEXD</b><span>v8</span></div>
+  <div class="pagebar" id="pagebar"></div>
+  <div id="pubBar" class="pubbar" hidden></div>
+
+  <!-- view: reports -->
+  <section class="hcard" id="vReports">
+    <header><h2>Reports &amp; dashboards</h2></header>
+    <div id="repList"></div>
+  </section>
+
+  <!-- view: system settings -->
+  <section class="hcard" id="vSettings" hidden>
+    <header>
+      <h2>System settings</h2>
+      <button class="prim ghost" data-h="addconn">+ Connection</button>
+    </header>
+    <div id="connList"></div>
+    <div id="schema"></div>
+    <div id="defaults"></div>
+    <div id="workspace"></div>
+  </section>
+
+  <!-- view: editor -->
+  <div id="vEditor" hidden>
+    <div class="help" id="help">
+      <span><b>Nothing here is filled in for you.</b>
+      Declare your tables under <b>System Settings</b>, then design against them &mdash; boxes show
+      their real shape with dashes where rows will land. Click the report name, a filter label, a box
+      title or a table header and type over it; everything selectable has <b>&#9881; Format</b> for
+      font, size, case, colour and alignment.</span>
+      <button id="helpX" title="Dismiss">&#10005;</button>
+    </div>
+    <div class="sheet" id="canvas"></div>
+  </div>
+
+</div>
+
+<input type="file" id="fileIn" accept="application/json" hidden>
+
+<script>
+"use strict";
+/* ==========================================================================
+   NexD Designer v4 — single file, no build step, no dependencies.
+
+   Design principle for this version: you configure a thing *where it sits*.
+   Selecting a filter, section or box reveals its own toolbar and its own
+   config panel attached to that element. There is no separate inspector.
+   ========================================================================== */
+
+/* ------------------------------ schema ------------------------------
+   There is no data in this file. Tables and columns are declared in System
+   settings so a report can be designed before anything is wired up; once a
+   connection is live, GET /api/catalog fills the same structure and the
+   middleware returns the rows. Nothing here invents a row. */
+let SCHEMA={tables:[]};                 // [{id,name,columns:[{name,type}]}]
+const TABLES=[];                        // kept as an array: many call sites read it
+function syncTables(){
+  TABLES.length=0;
+  SCHEMA.tables.forEach(t=>{ if(t.name) TABLES.push(t.name); });
+}
+function tableDef(t){return SCHEMA.tables.find(x=>x.name===t);}
+function colsOf(t){const d=tableDef(t);return d?d.columns:[];}
+function distinct(){return [];}          // needs a live connection
+const COLTYPES=[["text","text"],["number","number"],["date","date"],["bool","yes/no"]];
+function parseCols(txt){
+  return String(txt||"").split(/\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const m=l.split(/[\s,|:]+/);
+    const type=(m[1]||"").toLowerCase();
+    return {name:m[0],type:["number","date","bool"].includes(type)?type:"text"};
+  });
+}
+const colsText=cs=>(cs||[]).map(c=>c.name+" "+c.type).join("\n");
+
+/* What a box can show right now, and why. */
+function dataState(src){
+  if(!TABLES.length)return "noschema";
+  if(!src||!src.base)return "notable";
+  return "nolive";
+}
+function placeholder(msg,sub,h){
+  return '<div class="ph"'+(h?' style="min-height:'+h+'px"':"")+'><b>'+esc(msg)+'</b>'+
+         (sub?'<span>'+esc(sub)+'</span>':"")+'</div>';
+}
+function stateNote(st){
+  return st==="noschema"?["No tables declared yet","Add them in System settings"]
+       : st==="notable" ?["No table chosen","Open Set up and pick one"]
+       :                 ["Waiting on the database","The middleware returns the rows"];
+}
+
+/* ------------------------------ constants ------------------------------ */
+const PALETTE=["#0D6E62","#3B5BA5","#96610A","#9E332B","#5E8C6A","#7A5C8E","#B8862A","#1B2529"];
+const SWATCH=["","#1A2326","#0D6E62","#3B5BA5","#96610A","#9E332B","#6B7A78"];
+const BGSWATCH=["","#F7F9F8","#E0EFEC","#F6EEDC","#F6E5E3","#EAEFF7","#1B2529"];
+const SIZES=[11,12,13,14,16,18,20,24,28,32,40,48];
+const SPANS=[[3,"¼"],[4,"⅓"],[6,"½"],[8,"⅔"],[12,"1"]];
+const AGGS=["SUM","AVG","COUNT","COUNT DISTINCT","MIN","MAX"];
+const JOIN_TYPES=[["INNER","INNER JOIN"],["LEFT","LEFT JOIN"]];
+const OPS=[["=","="],["<>","≠"],[">",">"],[">=","≥"],["<","<"],["<=","≤"],
+           ["contains","contains"],["starts","starts with"],["in","in list"],
+           ["blank","is blank"],["notblank","is not blank"]];
+const CHARTS=[["bar","Bar"],["hbar","Bars →"],["line","Line"],["area","Area"],["pie","Pie"],["donut","Donut"]];
+const CONTROLS=[["text","Text box"],["date","Date"],["daterange","Date range"],["select","Dropdown"],
+                ["radio","Option buttons"],["checkbox","Check boxes"],["toggle","Yes / No"],["number","Number"]];
+const LABEL_POS=[["top","Above"],["left","Left"],["right","Right"],["hidden","Hidden"]];
+const FWIDTHS=[["narrow","S"],["auto","M"],["wide","L"],["full","Full row"]];
+const FMTS=[["auto","Auto"],["text","Text"],["number","Number"],["currency","Currency"],
+            ["percent","Percent"],["date","Date"]];
+
+const uid=p=>p+"-"+Math.random().toString(36).slice(2,7);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const FONTS=[["","Default"],["Georgia, 'Times New Roman', serif","Serif"],
+  ["var(--mono)","Mono"],["Arial, Helvetica, sans-serif","Arial"],
+  ["'Trebuchet MS', sans-serif","Trebuchet"],["Verdana, Geneva, sans-serif","Verdana"],
+  ["'Courier New', monospace","Courier"],["'Palatino Linotype', Palatino, serif","Palatino"]];
+const ALIGNS=[["","Auto"],["left","L"],["center","C"],["right","R"],["justify","J"]];
+const CASES=[["","Aa"],["uppercase","AA"],["lowercase","aa"],["capitalize","Aa·"]];
+const S=(o={})=>Object.assign({font:"",size:null,color:"",bg:"",align:"",caps:"",
+  bold:null,italic:null,underline:null},o);
+const normS=st=>S(st||{});
+const BSTYLES=[["solid","Solid"],["dashed","Dashed"],["dotted","Dotted"],["double","Double"]];
+const BCOLORS=["#D5DDDA","#1A2326","#0D6E62","#3B5BA5","#96610A","#9E332B"];
+const F=(o={})=>Object.assign({on:false,style:"solid",width:1,color:"#D5DDDA",
+  radius:3,pad:14,bg:""},o);
+function frameCSS(fr){
+  if(!fr||!fr.on)return "";
+  return "border:"+(+fr.width||1)+"px "+(fr.style||"solid")+" "+(fr.color||"#D5DDDA")+
+    ";border-radius:"+(fr.radius===undefined?3:+fr.radius)+"px"+
+    ";padding:"+(fr.pad===undefined?14:+fr.pad)+"px"+
+    (fr.bg?";background:"+fr.bg:"");
+}
+function frameControls(base,fr,what){
+  fr=F(fr);
+  let s='<div class="toggles">'+chk(base+".on",fr.on,"Draw a border around "+what)+'</div>';
+  if(!fr.on)return s+'<div class="hint">Off — '+esc(what)+' sits flush with the page.</div>';
+  return s+
+    '<div class="row">'+
+      fld("Style",chips(base+".style",fr.style,BSTYLES))+
+      fld("Thickness",ddl(base+".width",fr.width,[1,2,3,4,6],' data-kind="num"'))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Corner radius",ddl(base+".radius",fr.radius,[0,2,3,6,10,16],' data-kind="num"'))+
+      fld("Inner padding",ddl(base+".pad",fr.pad,[0,6,10,14,20,28],' data-kind="num"'))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Border colour",swatches(base+".color",fr.color,BCOLORS))+
+      fld("Fill",swatches(base+".bg",fr.bg,BGSWATCH))+
+    '</div>';
+}
+
+/* ------------------------------ document ------------------------------ */
+function blankDoc(){
+  return {
+    name:"New Report / Dashboard", numberFormat:"en-IN", nameStyle:S({size:24,bold:true}),
+    filters:[], sections:[]
+  };
+}
+const newFilter=()=>({id:uid("flt"),label:"",control:"text",table:TABLES[0]||"",column:"",
+  optionSource:"list",optTable:"",optColumn:"",list:"",value:"",visible:true,
+  labelPos:"left",colon:true,width:"auto",labelWidth:"",ctrlWidth:"",gap:8,placeholder:"",
+  style:S(),ctrlStyle:S()});
+const newSection=()=>({id:uid("sec"),name:"",desc:"",visible:true,boxes:[],cols:4,
+  style:S(),descStyle:S(),rule:true,nameVisible:true,subVisible:true,frame:F()});
+/* which "cells wide" buttons to offer for a grid of N columns */
+function spanChoices(n){
+  if(n<=6)return Array.from({length:n},(_,i)=>[i+1,String(i+1)]);
+  const raw=[1,Math.round(n/4),Math.round(n/3),Math.round(n/2),Math.round(n*2/3),n];
+  return [...new Set(raw.filter(x=>x>=1&&x<=n))].sort((a,b)=>a-b).map(x=>[x,String(x)]);
+}
+const newSrc=(base="")=>({base:base||(TABLES[0]||""),joins:[],where:[],whereLink:"AND"});
+function spanLabel(v,cols){
+  if(v>=cols)return "Full width";
+  const f=v/cols, names=[[0.25,"Quarter"],[1/3,"Third"],[0.5,"Half"],
+    [2/3,"Two thirds"],[0.75,"Three quarters"]];
+  const hit=names.find(([x])=>Math.abs(x-f)<0.001);
+  return hit?hit[1]:v+" of "+cols+" cells";
+}
+const widthOptions=cols=>Array.from({length:cols},(_,i)=>[i+1,spanLabel(i+1,cols)]);
+const BOX_KINDS=[["value","Value"],["chart","Graph"],["table","Table"],["note","Note"]];
+/* A box carries all four configurations, so switching what it shows never
+   discards what you already set up for the others. */
+function ensureConfigs(b){
+  if(!b.value)b.value={source:TABLES.length?"data":"manual",manual:"0",formula:"",agg:"COUNT",
+    column:"",prefix:"",suffix:"",decimals:0,unit:"",delta:"",deltaDir:"up",note:"",
+    tone:"#1A2326",showTrack:false,trackPct:64};
+  if(!b.chart)b.chart={type:"bar",category:"",agg:"COUNT",column:"",legendPos:"bottom",
+    limit:8,sort:"value",dir:"desc",height:220,legend:true,grid:true,values:false,palette:0};
+  if(!b.table)b.table={columns:[],limit:8,sort:"",dir:"asc",zebra:true,totals:false,headStyle:S()};
+  if(!b.note)b.note={html:""};
+  return b;
+}
+function newBox(kind){
+  const b={id:uid("box"),kind:kind||"value",title:"",span:1,
+    style:S(),titleStyle:S(),frame:F(),useFilters:true,visible:true,
+    titleVisible:true,src:newSrc()};
+  ensureConfigs(b);
+  if(b.src.base)applyDefaults(b);
+  return b;
+}
+
+/* ------------------------------ state ------------------------------ */
+let doc=blankDoc();
+let sel=null;          // {kind:'filter'|'section'|'box'|'head', id}
+let cfgTab="data";     // which tab of the in-place panel is open
+let cfgOpen=false;     // is the config panel showing for the selection
+let mode="design";
+let pendingDel=null;   // {kind,id} awaiting confirmation
+
+/* ------------------------------ formatting ------------------------------ */
+function nf(n,dec){
+  if(n===null||n===undefined||isNaN(n))return "—";
+  return Number(n).toLocaleString(doc.numberFormat,{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function fmtCell(v,fmt){
+  if(v===null||v===undefined||v==="")return "";
+  switch(fmt){
+    case "number":   return nf(v,0);
+    case "currency": return "₹"+nf(v,0);
+    case "percent":  return nf(v,1)+"%";
+    case "date":     return String(v);
+    case "text":     return String(v);
+    default:         return typeof v==="number" ? nf(v, Number.isInteger(v)?0:1) : String(v);
+  }
+}
+/* returns the declarations, so callers can add their own before wrapping */
+function styleDecl(st,skip){
+  if(!st)return [];
+  const sk=skip||{}, p=[];
+  if(st.font)p.push("font-family:"+st.font);
+  if(st.size)p.push("font-size:"+st.size+"px");
+  if(st.color)p.push("color:"+st.color);
+  if(st.bg&&!sk.bg)p.push("background:"+st.bg);
+  if(st.align&&!sk.align)p.push("text-align:"+st.align);
+  if(st.bold!==null&&st.bold!==undefined)p.push("font-weight:"+(st.bold?700:400));
+  if(st.italic)p.push("font-style:italic");
+  if(st.underline)p.push("text-decoration:underline");
+  if(st.caps)p.push("text-transform:"+st.caps);
+  return p;
+}
+const wrapStyle=p=>p.length?' style="'+p.join(";")+'"':"";
+function styleAttr(st,skip){return wrapStyle(styleDecl(st,skip));}
+
+/* ------------------------------ query engine ------------------------------ */
+/* A filter binds to a column name. It applies to any queried table that has a
+   column with that name — the simple, predictable rule, stated in the UI. */
+function activeFilters(){
+  return doc.filters.filter(f=>{
+    const v=f.value;
+    if(v===""||v===null||v===undefined)return false;
+    if(Array.isArray(v))return v.length>0;
+    if(typeof v==="object")return !!(v.from||v.to);
+    return true;
+  });
+}
+function passes(row,f){
+  let v=row[f.column];
+  if(v===undefined)v=row[f.table+"."+f.column];
+  if(v===undefined)return true;                 // column absent → filter ignored
+  const val=f.value;
+  switch(f.control){
+    case "text":     return String(v).toLowerCase().includes(String(val).toLowerCase());
+    case "number":   return Number(v)===Number(val);
+    case "date":     return String(v).slice(0,10)===String(val);
+    case "daterange":{
+      const d=String(v).slice(0,10);
+      if(val.from&&d<val.from)return false;
+      if(val.to&&d>val.to)return false;
+      return true;
+    }
+    case "checkbox": return val.map(String).includes(String(v));
+    case "toggle":   return String(v)===String(val)||
+                            (val==="1"&&(v===true||v==="Yes"))||(val==="0"&&(v===false||v==="No"));
+    default:         return String(v)===String(val); // select, radio
+  }
+}
+/* Columns available after joins. Base columns keep their bare name; joined
+   ones are prefixed with their table, exactly as they appear in the SQL. */
+function colOptions(src){
+  const out=colsOf(src.base).map(c=>({name:c.name,type:c.type}));
+  (src.joins||[]).forEach(j=>{
+    if(!j.table)return;
+    colsOf(j.table).forEach(c=>out.push({name:j.table+"."+c.name,type:c.type}));
+  });
+  return out;
+}
+function typeOfCol(src,name){
+  const c=colOptions(src).find(x=>x.name===name);
+  return c?c.type:"text";
+}
+/* one hash join per configured join, INNER or LEFT */
+function joinRows(src){
+  let rows=[];
+  (src.joins||[]).forEach(j=>{
+    if(!j.table||!j.leftCol||!j.rightCol)return;
+    const idx=new Map();
+    const blank={};
+    colsOf(j.table).forEach(c=>blank[j.table+"."+c.name]=null);
+    const out=[];
+    rows.forEach(r=>{
+      const m=idx.get(String(r[j.leftCol]));
+      if(m&&m.length){
+        m.forEach(x=>{
+          const o=Object.assign({},r);
+          Object.keys(x).forEach(c=>o[j.table+"."+c]=x[c]);
+          out.push(o);
+        });
+      }else if(j.type==="LEFT")out.push(Object.assign({},r,blank));
+    });
+    rows=out;
+  });
+  return rows;
+}
+function condMatch(row,c){
+  if(!c.col)return true;
+  const v=row[c.col], val=c.val;
+  if(c.op==="blank")return v===null||v===undefined||v==="";
+  if(c.op==="notblank")return !(v===null||v===undefined||v==="");
+  if(val===""||val===undefined)return true;      // incomplete condition is ignored
+  if(v===null||v===undefined)return false;
+  const sv=String(v).toLowerCase(), svl=String(val).toLowerCase();
+  switch(c.op){
+    case "contains": return sv.includes(svl);
+    case "starts":   return sv.startsWith(svl);
+    case "in":       return String(val).split(",").map(x=>x.trim().toLowerCase()).includes(sv);
+    case "<>":       return String(v)!==String(val);
+    case ">":  case ">=": case "<": case "<=":{
+      const a=isNaN(+v)?String(v):+v, b=isNaN(+val)?String(val):+val;
+      return c.op===">"?a>b:c.op===">="?a>=b:c.op==="<"?a<b:a<=b;
+    }
+    default:         return String(v)===String(val);
+  }
+}
+function whereMatch(row,src){
+  const w=(src.where||[]).filter(c=>c.col);
+  if(!w.length)return true;
+  return (src.whereLink||"AND")==="OR" ? w.some(c=>condMatch(row,c)) : w.every(c=>condMatch(row,c));
+}
+/* everything a box reads goes through here */
+function resolveRows(src,useFilters){
+  if(!src||!src.base)return [];
+  let rows=(src.joins&&src.joins.length)?joinRows(src):[];
+  rows=rows.filter(r=>whereMatch(r,src));
+  if(useFilters!==false){
+    const fs=activeFilters();
+    if(fs.length)rows=rows.filter(r=>fs.every(f=>passes(r,f)));
+  }
+  return rows;
+}
+function agg(rows,how,col){
+  if(how==="COUNT")return rows.length;
+  if(how==="COUNT DISTINCT")return new Set(rows.map(r=>r[col])).size;
+  const nums=rows.map(r=>Number(r[col])).filter(n=>!isNaN(n));
+  if(!nums.length)return 0;
+  switch(how){
+    case "AVG":return nums.reduce((a,b)=>a+b,0)/nums.length;
+    case "MIN":return Math.min(...nums);
+    case "MAX":return Math.max(...nums);
+    default:   return nums.reduce((a,b)=>a+b,0);
+  }
+}
+function groupAgg(rows,groupCol,how,col,limit,sort,dir){
+  const m=new Map();
+  rows.forEach(r=>{
+    const k=r[groupCol];
+    if(k===undefined||k===null||k==="")return;
+    if(!m.has(k))m.set(k,[]);
+    m.get(k).push(r);
+  });
+  let out=[...m.entries()].map(([label,rs])=>({label:String(label),value:agg(rs,how,col)}));
+  if(sort==="value")out.sort((a,b)=>b.value-a.value);
+  else out.sort((a,b)=>a.label.localeCompare(b.label,undefined,{numeric:true}));
+  if(dir==="asc"&&sort==="value")out.reverse();
+  if(dir==="desc"&&sort!=="value")out.reverse();
+  if(limit&&out.length>limit){
+    const head=out.slice(0,limit-1);
+    const rest=out.slice(limit-1).reduce((a,b)=>a+b.value,0);
+    head.push({label:"Other",value:rest});
+    out=head;
+  }
+  return out;
+}
+
+/* Give a box a usable starting binding so there is something to customise the
+   moment it appears; also reused when its base table is swapped. */
+function applyDefaults(b){
+  const cs=colOptions(b.src);
+  const firstText=(cs.find(c=>c.type==="text")||cs[0]||{}).name||"";
+  const firstNum =(cs.find(c=>c.type==="number")||{}).name||"";
+  if(b.kind==="value"&&b.value){
+    b.value.column=firstNum||(cs[0]||{}).name||"";
+    b.value.agg=firstNum?"SUM":"COUNT";
+  }
+  if(b.kind==="chart"&&b.chart){
+    b.chart.category=firstText;
+    b.chart.column=firstNum||firstText;
+    b.chart.agg=firstNum?"SUM":"COUNT";
+  }
+  if(b.kind==="table"&&b.table){
+    b.table.columns=cs.map((c,i)=>({col:c.name,label:c.name.replace(/_/g," "),
+      fmt:c.type==="number"?"number":c.type==="date"?"date":"auto",
+      align:c.type==="number"?"right":"left",width:"",on:i<6}));
+    b.table.sort="";
+  }
+  return b;
+}
+
+/* ------------------------------ Excel-style formulas ------------------------------
+   A KPI can be written as an expression instead of a single aggregate:
+
+     =SUM(net) - SUM(tax)
+     =ROUND(SUM(net) / COUNT(invoice_no), 2)
+     =IF(SUM(net) > 0, SUM(tax) / SUM(net) * 100, 0)
+     =[Gross spend] - [Tax]            <- another box, by its title
+
+   Column names inside an aggregate may be bare or in [brackets]; joined
+   columns keep their table prefix, e.g. SUM([vendors.amount]).
+   The parser validates against the declared schema, so a typo is reported
+   before there is any data. */
+const AGG_FN={SUM:"SUM",AVG:"AVG",AVERAGE:"AVG",COUNT:"COUNT",COUNTD:"COUNT DISTINCT",
+  COUNTDISTINCT:"COUNT DISTINCT",MIN:"MIN",MAX:"MAX"};
+const SCALAR_FN={ROUND:1,ABS:1,SQRT:1,POWER:1,IF:1,AND:1,OR:1,NOT:1,MAX:1,MIN:1,SUM:1};
+const FORMULA_HELP="SUM AVG COUNT COUNTD MIN MAX · ROUND ABS SQRT POWER IF AND OR NOT";
+
+function tokenise(src){
+  const t=[]; let i=0;
+  const two=["<=",">=","<>"];
+  while(i<src.length){
+    const c=src[i];
+    if(/\s/.test(c)){i++;continue;}
+    if(c==="["){
+      const j=src.indexOf("]",i);
+      if(j<0)throw new Error("unclosed [");
+      t.push({k:"ref",v:src.slice(i+1,j).trim()});i=j+1;continue;
+    }
+    if(c==='"'||c==="'"){
+      const j=src.indexOf(c,i+1);
+      if(j<0)throw new Error("unclosed quote");
+      t.push({k:"str",v:src.slice(i+1,j)});i=j+1;continue;
+    }
+    if(/[0-9]/.test(c)||(c==="."&&/[0-9]/.test(src[i+1]||""))){
+      let j=i; while(j<src.length&&/[0-9.]/.test(src[j]))j++;
+      t.push({k:"num",v:parseFloat(src.slice(i,j))});i=j;continue;
+    }
+    if(/[A-Za-z_]/.test(c)){
+      let j=i; while(j<src.length&&/[A-Za-z0-9_.]/.test(src[j]))j++;
+      t.push({k:"id",v:src.slice(i,j)});i=j;continue;
+    }
+    if(two.includes(src.slice(i,i+2))){t.push({k:"op",v:src.slice(i,i+2)});i+=2;continue;}
+    if("+-*/^(),%<>=".includes(c)){t.push({k:"op",v:c});i++;continue;}
+    throw new Error("unexpected character "+c);
+  }
+  return t;
+}
+function parseFormula(src){
+  const t=tokenise(src); let p=0;
+  const peek=()=>t[p], eat=v=>{
+    if(!t[p]||(v&&t[p].v!==v))throw new Error("expected "+(v||"more input"));
+    return t[p++];
+  };
+  function expr(){return cmp();}
+  function cmp(){
+    let n=add();
+    while(peek()&&peek().k==="op"&&["<",">","<=",">=","=","<>"].includes(peek().v)){
+      const o=eat().v; n={k:"bin",o,a:n,b:add()};
+    }
+    return n;
+  }
+  function add(){
+    let n=mul();
+    while(peek()&&peek().k==="op"&&["+","-"].includes(peek().v)){
+      const o=eat().v; n={k:"bin",o,a:n,b:mul()};
+    }
+    return n;
+  }
+  function mul(){
+    let n=pow();
+    while(peek()&&peek().k==="op"&&["*","/"].includes(peek().v)){
+      const o=eat().v; n={k:"bin",o,a:n,b:pow()};
+    }
+    return n;
+  }
+  function pow(){
+    let n=unary();
+    if(peek()&&peek().k==="op"&&peek().v==="^"){eat();n={k:"bin",o:"^",a:n,b:pow()};}
+    if(peek()&&peek().k==="op"&&peek().v==="%"){eat();n={k:"bin",o:"/",a:n,b:{k:"num",v:100}};}
+    return n;
+  }
+  function unary(){
+    if(peek()&&peek().k==="op"&&(peek().v==="-"||peek().v==="+")){
+      const o=eat().v; return {k:"un",o,a:unary()};
+    }
+    return primary();
+  }
+  function primary(){
+    const tk=peek();
+    if(!tk)throw new Error("the formula ends early");
+    if(tk.k==="num"){eat();return {k:"num",v:tk.v};}
+    if(tk.k==="str"){eat();return {k:"str",v:tk.v};}
+    if(tk.k==="ref"){eat();return {k:"ref",v:tk.v};}
+    if(tk.k==="op"&&tk.v==="("){eat("(");const n=expr();eat(")");return n;}
+    if(tk.k==="id"){
+      eat();
+      const name=tk.v;
+      if(peek()&&peek().k==="op"&&peek().v==="("){
+        eat("(");
+        const args=[];
+        if(!(peek()&&peek().k==="op"&&peek().v===")")){
+          args.push(expr());
+          while(peek()&&peek().k==="op"&&peek().v===","){eat(",");args.push(expr());}
+        }
+        eat(")");
+        return {k:"call",fn:name.toUpperCase(),args};
+      }
+      if(/^(TRUE|FALSE)$/i.test(name))return {k:"num",v:/^true$/i.test(name)?1:0};
+      return {k:"ref",v:name};
+    }
+    throw new Error("unexpected "+tk.v);
+  }
+  const n=expr();
+  if(p<t.length)throw new Error("unexpected "+t[p].v);
+  return n;
+}
+/* ctx: {cols:[names], rows:[...], box(title), seen:Set} */
+function runNode(n,ctx){
+  switch(n.k){
+    case "num": case "str": return n.v;
+    case "un":  {const v=runNode(n.a,ctx);return n.o==="-"?-num(v):num(v);}
+    case "bin": {
+      const a=runNode(n.a,ctx), b=runNode(n.b,ctx);
+      switch(n.o){
+        case "+": return blank(a,b)?null:num(a)+num(b);
+        case "-": return blank(a,b)?null:num(a)-num(b);
+        case "*": return blank(a,b)?null:num(a)*num(b);
+        case "/": {if(blank(a,b))return null; const d=num(b); return d===0?null:num(a)/d;}
+        case "^": return blank(a,b)?null:Math.pow(num(a),num(b));
+        case "=": return String(a)===String(b)?1:0;
+        case "<>":return String(a)!==String(b)?1:0;
+        case "<": return num(a)<num(b)?1:0;
+        case ">": return num(a)>num(b)?1:0;
+        case "<=":return num(a)<=num(b)?1:0;
+        case ">=":return num(a)>=num(b)?1:0;
+      }
+      return null;
+    }
+    case "ref": {
+      if(ctx.cols.includes(n.v))
+        throw new Error('"'+n.v+'" is a column — wrap it, e.g. SUM('+n.v+')');
+      const bv=ctx.box(n.v);
+      if(bv===undefined)throw new Error('nothing called "'+n.v+'" — not a column or a box');
+      return bv;
+    }
+    case "call": {
+      const fn=n.fn;
+      const isCol=x=>x&&x.k==="ref"&&ctx.cols.includes(x.v);
+      if(AGG_FN[fn]&&n.args.length===1&&isCol(n.args[0]))
+        return ctx.agg(AGG_FN[fn],n.args[0].v);
+      if(AGG_FN[fn]&&n.args.length===1&&n.args[0].k==="ref")
+        throw new Error('unknown column "'+n.args[0].v+'"');
+      /* name the real problem before blaming the arguments */
+      if(!SCALAR_FN[fn]&&!AGG_FN[fn])throw new Error("unknown function "+fn+"()");
+      const A=n.args.map(x=>runNode(x,ctx));
+      switch(fn){
+        case "ROUND":{const d=A.length>1?num(A[1]):0,m=Math.pow(10,d);
+          return A[0]===null?null:Math.round(num(A[0])*m)/m;}
+        case "ABS":   return A[0]===null?null:Math.abs(num(A[0]));
+        case "SQRT":  return A[0]===null?null:Math.sqrt(num(A[0]));
+        case "POWER": return blank(A[0],A[1])?null:Math.pow(num(A[0]),num(A[1]));
+        case "IF":    return num(A[0])?A[1]:(A.length>2?A[2]:0);
+        case "AND":   return A.every(x=>num(x))?1:0;
+        case "OR":    return A.some(x=>num(x))?1:0;
+        case "NOT":   return num(A[0])?0:1;
+        case "SUM":   return A.some(x=>x===null)?null:A.reduce((a,b)=>a+num(b),0);
+        case "MAX":   return A.some(x=>x===null)?null:Math.max(...A.map(num));
+        case "MIN":   return A.some(x=>x===null)?null:Math.min(...A.map(num));
+      }
+      throw new Error("unknown function "+fn+"()");
+    }
+  }
+  return null;
+}
+const num=v=>{const n=Number(v);return isNaN(n)?0:n;};
+const blank=(...v)=>v.some(x=>x===null||x===undefined);
+
+/* Evaluate a box's formula. Returns {ok, value, error}. value is null when
+   there are no rows yet, which is every case until a connection is live. */
+function evalFormula(src,b,seen){
+  const raw=String(src||"").trim().replace(/^=/,"");
+  if(!raw)return {ok:false,error:"empty formula"};
+  let ast;
+  try{ast=parseFormula(raw);}catch(e){return {ok:false,error:e.message};}
+  const cols=colOptions(b.src).map(c=>c.name);
+  const rows=resolveRows(b.src,b.useFilters);
+  const visiting=seen||new Set();
+  visiting.add(b.id);
+  const ctx={
+    cols,
+    agg:(fn,col)=>rows.length?agg(rows,fn,col):null,
+    box:(title)=>{
+      let hit=null;
+      doc.sections.forEach(sc=>sc.boxes.forEach(x=>{
+        if(x.kind==="value"&&String(x.title).trim().toLowerCase()===String(title).trim().toLowerCase())hit=x;
+      }));
+      if(!hit)return undefined;
+      if(visiting.has(hit.id))throw new Error('"'+title+'" refers back to this box');
+      return boxNumber(hit,visiting);
+    }
+  };
+  try{return {ok:true,value:runNode(ast,ctx)};}
+  catch(e){return {ok:false,error:e.message};}
+}
+/* the numeric value behind a value box, whatever its source */
+function boxNumber(b,seen){
+  if(b.kind!=="value")return null;
+  const c=b.value;
+  if(c.source==="manual"){const n=parseFloat(String(c.manual).replace(/[^0-9.\-]/g,""));return isNaN(n)?null:n;}
+  if(c.source==="formula"){const r=evalFormula(c.formula,b,seen);return r.ok?r.value:null;}
+  const rows=resolveRows(b.src,b.useFilters);
+  return rows.length?agg(rows,c.agg,c.column):null;
+}
+
+/* ------------------------------ charts (hand-rolled SVG) ------------------------------ */
+function chartSVG(data,o){
+  const W=700,H=o.height||220,pal=PALETTE.slice(o.palette||0).concat(PALETTE);
+  if(!data.length)return "";
+  const max=Math.max(...data.map(d=>d.value),0)||1;
+  const min=Math.min(...data.map(d=>d.value),0);
+  const short=v=>Math.abs(v)>=1e7?(v/1e7).toFixed(1)+"Cr":Math.abs(v)>=1e5?(v/1e5).toFixed(1)+"L":
+    Math.abs(v)>=1000?(v/1000).toFixed(0)+"k":nf(v,0);
+  let s='<svg class="chart-wrap" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" role="img">';
+
+  if(o.type==="pie"||o.type==="donut"){
+    const total=data.reduce((a,b)=>a+Math.abs(b.value),0)||1;
+    const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14,r0=o.type==="donut"?R*0.58:0;
+    let a0=-Math.PI/2;
+    data.forEach((d,i)=>{
+      const a1=a0+(Math.abs(d.value)/total)*Math.PI*2;
+      const big=a1-a0>Math.PI?1:0;
+      const p=(rr,a)=>[cx+rr*Math.cos(a),cy+rr*Math.sin(a)];
+      const [x1,y1]=p(R,a0),[x2,y2]=p(R,a1),[x3,y3]=p(r0,a1),[x4,y4]=p(r0,a0);
+      s+='<path d="M'+x1+' '+y1+'A'+R+' '+R+' 0 '+big+' 1 '+x2+' '+y2+
+         (r0?'L'+x3+' '+y3+'A'+r0+' '+r0+' 0 '+big+' 0 '+x4+' '+y4:'L'+cx+' '+cy)+
+         'Z" fill="'+pal[i%pal.length]+'" stroke="#fff" stroke-width="1.5"/>';
+      a0=a1;
+    });
+    if(o.type==="donut"){
+      s+='<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" font-size="19" font-weight="600" fill="#1A2326">'+
+         esc(short(total))+'</text>';
+      s+='<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-size="10" fill="#6B7A78">TOTAL</text>';
+    }
+    return s+'</svg>';
+  }
+
+  if(o.type==="hbar"){
+    const padL=Math.min(150,Math.max(...data.map(d=>d.label.length))*6.4+10),padR=52;
+    const bh=Math.min(28,(H-16)/data.length-6);
+    data.forEach((d,i)=>{
+      const y=10+i*((H-16)/data.length), w=Math.max(1,(d.value/max)*(W-padL-padR));
+      s+='<rect x="'+padL+'" y="'+y+'" width="'+w+'" height="'+bh+'" rx="1.5" fill="'+pal[i%pal.length]+'"/>';
+      s+='<text x="'+(padL-8)+'" y="'+(y+bh/2+4)+'" text-anchor="end" font-size="11" fill="#1A2326">'+esc(d.label)+'</text>';
+      s+='<text x="'+(padL+w+7)+'" y="'+(y+bh/2+4)+'" font-size="10.5" fill="#6B7A78">'+esc(short(d.value))+'</text>';
+    });
+    return s+'</svg>';
+  }
+
+  /* cartesian: bar, line, area */
+  const padL=54,padR=12,padT=12,padB=30;
+  const iw=W-padL-padR, ih=H-padT-padB;
+  const top=max*1.08||1, bot=Math.min(0,min*1.08);
+  const Y=v=>padT+ih-((v-bot)/(top-bot))*ih;
+  if(o.grid!==false){
+    for(let i=0;i<=4;i++){
+      const v=bot+(top-bot)*i/4, y=Y(v);
+      s+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="#E7ECEA" stroke-width="1"/>';
+      s+='<text x="'+(padL-7)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="9.5" fill="#6B7A78">'+esc(short(v))+'</text>';
+    }
+  }
+  const step=iw/data.length;
+  if(o.type==="bar"){
+    const bw=Math.max(3,Math.min(46,step*0.62));
+    data.forEach((d,i)=>{
+      const x=padL+step*i+(step-bw)/2, y=Y(Math.max(d.value,0)), h=Math.abs(Y(d.value)-Y(0));
+      s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+Math.max(1,h)+'" rx="1.5" fill="'+pal[i%pal.length]+'"/>';
+      if(o.values)s+='<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9.5" fill="#6B7A78">'+esc(short(d.value))+'</text>';
+    });
+  }else{
+    const pts=data.map((d,i)=>[padL+step*i+step/2,Y(d.value)]);
+    const path=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+    if(o.type==="area")
+      s+='<path d="'+path+' L'+pts[pts.length-1][0]+' '+Y(Math.max(bot,0))+' L'+pts[0][0]+' '+Y(Math.max(bot,0))+' Z" fill="'+pal[0]+'" opacity=".14"/>';
+    s+='<path d="'+path+'" fill="none" stroke="'+pal[0]+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    pts.forEach((p,i)=>{
+      s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="#fff" stroke="'+pal[0]+'" stroke-width="2"/>';
+      if(o.values)s+='<text x="'+p[0]+'" y="'+(p[1]-8)+'" text-anchor="middle" font-size="9.5" fill="#6B7A78">'+esc(short(data[i].value))+'</text>';
+    });
+  }
+  data.forEach((d,i)=>{
+    const x=padL+step*i+step/2;
+    let lab=d.label; if(lab.length>11&&data.length>5)lab=lab.slice(0,10)+"…";
+    s+='<text x="'+x+'" y="'+(H-9)+'" text-anchor="middle" font-size="9.5" fill="#6B7A78">'+esc(lab)+'</text>';
+  });
+  return s+'</svg>';
+}
+function legendHTML(items,palOff,pos){
+  const pal=PALETTE.slice(palOff||0).concat(PALETTE);
+  return '<div class="legend'+(pos==="right"?" col":"")+'">'+items.map((d,i)=>
+    '<span><i style="background:'+(d.color||pal[i%pal.length])+'"></i>'+esc(d.label)+'</span>').join("")+'</div>';
+}
+/* what the legend should list for each chart type */
+function legendItems(data,c){
+  const pal=PALETTE.slice(c.palette||0).concat(PALETTE);
+  if(["line","area"].includes(c.type))
+    return [{label:(c.agg||"SUM")+" of "+(c.column||"value"),color:pal[0]}];
+  return data.map((d,i)=>({label:d.label,color:pal[i%pal.length]}));
+}
+
+/* ------------------------------ tiny HTML helpers ------------------------------ */
+function ce(path,val,cls,ph,st){
+  return '<div class="'+cls+'" contenteditable="true" data-edit="'+path+'" data-ph="'+esc(ph||"")+'"'+
+         styleAttr(st,{align:true})+'>'+esc(val||"")+'</div>';
+}
+function fld(label,inner){return '<div class="fld"><label>'+esc(label)+'</label>'+inner+'</div>';}
+function ddl(path,value,opts,extra){
+  const o=opts.map(x=>{const v=Array.isArray(x)?x[0]:x,l=Array.isArray(x)?x[1]:x;
+    return '<option value="'+esc(v)+'"'+(String(v)===String(value)?" selected":"")+'>'+esc(l)+'</option>';}).join("");
+  return '<select data-set="'+path+'"'+(extra||"")+'>'+o+'</select>';
+}
+function txt(path,value,ph,type){
+  return '<input type="'+(type||"text")+'" data-set="'+path+'" value="'+esc(value==null?"":value)+
+         '" placeholder="'+esc(ph||"")+'">';
+}
+function chk(path,value,label){
+  return '<label><input type="checkbox" data-set="'+path+'" data-kind="bool"'+(value?" checked":"")+'>'+esc(label)+'</label>';
+}
+function swtch(path,on,label){
+  return '<label class="swrow"><span>'+esc(label)+'</span>'+
+    '<span class="sw"><input type="checkbox" data-set="'+path+'" data-kind="bool"'+
+    (on?" checked":"")+'><i></i></span></label>';
+}
+function segbar(path,value,opts){
+  return '<div class="segbar">'+opts.map(([v,l])=>
+    '<button data-setbtn="'+path+'" data-val="'+esc(v)+'" aria-pressed="'+
+    (String(v)===String(value))+'">'+esc(l)+'</button>').join("")+'</div>';
+}
+function chips(path,value,opts){
+  return '<div class="chips">'+opts.map(x=>{const v=Array.isArray(x)?x[0]:x,l=Array.isArray(x)?x[1]:x;
+    return '<button data-setbtn="'+path+'" data-val="'+esc(v)+'" aria-pressed="'+(String(v)===String(value))+'">'+esc(l)+'</button>';
+  }).join("")+'</div>';
+}
+function swatches(path,value,list){
+  return '<div class="swatches">'+list.map(c=>
+    '<button data-setbtn="'+path+'" data-val="'+esc(c)+'" aria-pressed="'+(c===(value||""))+
+    '" title="'+(c||"none")+'" style="background:'+(c||"repeating-linear-gradient(45deg,#fff,#fff 4px,#E7ECEA 4px,#E7ECEA 8px)")+'"></button>').join("")+'</div>';
+}
+const isSel=(k,id)=>sel&&sel.kind===k&&sel.id===id;
+
+function confirmBar(kind,id,what,extra){
+  return '<div class="danger"><p><b>Delete '+esc(what)+'?</b> '+esc(extra||"")+
+    ' This cannot be undone.</p><div class="btns">'+
+    '<button class="dbtn" data-act="delyes">Yes, delete</button>'+
+    '<button class="dbtn cancel" data-act="delno">Keep it</button></div></div>';
+}
+const delButton=label=>'<button class="delbtn" data-act="askdel">Delete '+esc(label)+'</button>';
+const isPending=(k,id)=>pendingDel&&pendingDel.kind===k&&pendingDel.id===id;
+
+/* ------------------------------ format panel (shared) ------------------------------ */
+function formatPanel(base,st,label){
+  st=normS(st);
+  return (label===null?"":'<div class="grp">'+esc(label||"Text")+'</div>')+
+    '<div class="row">'+
+      fld("Font",ddl(base+".font",st.font||"",FONTS))+
+      fld("Size",ddl(base+".size",st.size||"",[["","Default"]].concat(SIZES.map(x=>[x,x+" px"]))))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Style",'<div class="chips">'+
+        '<button data-setbtn="'+base+'.bold" data-val="'+(st.bold?"":"true")+'" aria-pressed="'+
+          (!!st.bold)+'" title="Bold" style="font-weight:700;min-width:30px">B</button>'+
+        '<button data-setbtn="'+base+'.italic" data-val="'+(st.italic?"":"true")+'" aria-pressed="'+
+          (!!st.italic)+'" title="Italic" style="font-style:italic;min-width:30px">I</button>'+
+        '<button data-setbtn="'+base+'.underline" data-val="'+(st.underline?"":"true")+'" aria-pressed="'+
+          (!!st.underline)+'" title="Underline" style="text-decoration:underline;min-width:30px">U</button>'+
+      '</div>')+
+      fld("Align",chips(base+".align",st.align||"",ALIGNS))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Letter case",chips(base+".caps",st.caps||"",CASES))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Text colour",swatches(base+".color",st.color,SWATCH))+
+      fld("Background",swatches(base+".bg",st.bg,BGSWATCH))+
+    '</div>';
+}
+
+/* ------------------------------ filters ------------------------------ */
+function optionsFor(f){
+  if(f.optionSource==="list")
+    return f.list.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
+  if(f.optionSource==="table")
+    return distinct(f.optTable,f.optColumn).map(String);
+  return distinct(f.table,f.column).map(String);
+}
+function controlHTML(f){
+  const v=f.value, id=f.id;
+  switch(f.control){
+    case "text":   return '<input type="text" data-fv="'+id+'" value="'+esc(v||"")+
+                          '" placeholder="'+esc(f.placeholder||"Contains…")+'">';
+    case "number": return '<input type="number" data-fv="'+id+'" value="'+esc(v||"")+
+                          '" placeholder="'+esc(f.placeholder||"Exact")+'">';
+    case "date":   return '<input type="date" data-fv="'+id+'" value="'+esc(v||"")+'">';
+    case "daterange":{
+      const o=v&&typeof v==="object"?v:{};
+      return '<span class="pair"><input type="date" data-fv="'+id+'" data-part="from" value="'+esc(o.from||"")+'">'+
+             '<input type="date" data-fv="'+id+'" data-part="to" value="'+esc(o.to||"")+'"></span>';
+    }
+    case "toggle": return '<div class="opts">'+
+      ["","Yes","No"].map((lab,i)=>{const val=["","Yes","No"][i];
+        return '<label><input type="radio" name="r-'+id+'" data-fv="'+id+'" value="'+esc(val)+'"'+
+        (String(v||"")===val?" checked":"")+'>'+(lab||"Any")+'</label>';}).join("")+'</div>';
+    case "radio":{
+      const opts=optionsFor(f).slice(0,12);
+      return '<div class="opts"><label><input type="radio" name="r-'+id+'" data-fv="'+id+'" value=""'+
+        (!v?" checked":"")+'>All</label>'+opts.map(o=>
+        '<label><input type="radio" name="r-'+id+'" data-fv="'+id+'" value="'+esc(o)+'"'+
+        (String(v)===o?" checked":"")+'>'+esc(o)+'</label>').join("")+'</div>';
+    }
+    case "checkbox":{
+      const arr=Array.isArray(v)?v.map(String):[];
+      return '<div class="opts">'+optionsFor(f).slice(0,14).map(o=>
+        '<label><input type="checkbox" data-fv="'+id+'" data-multi="1" value="'+esc(o)+'"'+
+        (arr.includes(o)?" checked":"")+'>'+esc(o)+'</label>').join("")+'</div>';
+    }
+    default:{
+      const opts=optionsFor(f);
+      return '<select data-fv="'+id+'"><option value="">All</option>'+opts.map(o=>
+        '<option value="'+esc(o)+'"'+(String(v)===o?" selected":"")+'>'+esc(o)+'</option>').join("")+'</select>';
+    }
+  }
+}
+function filterCfg(f){
+  let s='<div class="cfg" style="min-width:280px"><div class="cfg-tabs">'+
+    '<button data-act="tab" data-val="data" aria-pressed="'+(cfgTab==="data")+'">Set up</button>'+
+    '<button data-act="tab" data-val="format" aria-pressed="'+(cfgTab==="format")+'">Format</button></div>';
+  if(cfgTab==="format"){
+    s+=formatPanel("filter:"+f.id+":style",f.style,"Filter name");
+    s+=formatPanel("filter:"+f.id+":ctrlStyle",f.ctrlStyle,"The control itself");
+    s+='<div class="grp">Remove</div>'+delButton("this filter");
+    return s+'</div>';
+  }
+  const idx=doc.filters.findIndex(x=>x.id===f.id), n=doc.filters.length;
+  s+='<div class="grp">Label</div><div class="row">'+
+     fld("Filter label",txt("filter:"+f.id+":label",f.label,"Vendor Name"))+
+   '</div>';
+  s+='<div class="grp">Type</div>'+chips("filter:"+f.id+":control",f.control,CONTROLS);
+  s+='<div class="grp">Placement in the filter bar</div><div class="row">'+
+     fld("Position",'<select data-fpos="'+f.id+'">'+
+       doc.filters.map((_,k)=>'<option value="'+k+'"'+(k===idx?" selected":"")+'>'+
+         (k+1)+' of '+n+'</option>').join("")+'</select>')+
+     fld("Chip width",chips("filter:"+f.id+":width",f.width||"auto",FWIDTHS))+
+   '</div>'+
+   '<div class="grp">The row: label and control</div>'+
+   '<div class="row">'+
+     fld("Label sits",chips("filter:"+f.id+":labelPos",f.labelPos||"top",LABEL_POS))+
+   '</div>'+
+   '<div class="row">'+
+     fld("Label width (px)",txt("filter:"+f.id+":labelWidth",f.labelWidth,"auto","number"))+
+     fld("Control width (px)",txt("filter:"+f.id+":ctrlWidth",f.ctrlWidth,"fill","number"))+
+     fld("Gap (px)",txt("filter:"+f.id+":gap",f.gap===undefined?8:f.gap,"8","number"))+
+   '</div>'+
+   '<div class="toggles">'+chk("filter:"+f.id+":colon",!!f.colon,"Put a colon after the label")+'</div>'+
+   '<div class="row">'+
+     fld("Placeholder inside the box",txt("filter:"+f.id+":placeholder",f.placeholder,"e.g. start typing…"))+
+   '</div>'+
+   '<div class="hint">Label left + a fixed label width lines several filters up into a column.</div>';
+  s+='<div class="grp">Filters which column</div><div class="row">'+
+     fld("Table",ddl("filter:"+f.id+":table",f.table,TABLES))+
+     fld("Column",ddl("filter:"+f.id+":column",f.column,colsOf(f.table).map(c=>c.name)))+
+   '</div><div class="hint">Applies to every box whose table has a column of this name.</div>';
+  if(["select","radio","checkbox"].includes(f.control)){
+    s+='<div class="grp">Where the choices come from</div>'+
+       chips("filter:"+f.id+":optionSource",f.optionSource,
+         [["auto","Values in that column"],["table","Another table"],["list","A list I type"]]);
+    if(f.optionSource==="table")s+='<div class="row" style="margin-top:8px">'+
+      fld("Lookup table",ddl("filter:"+f.id+":optTable",f.optTable,[""].concat(TABLES)))+
+      fld("Value column",ddl("filter:"+f.id+":optColumn",f.optColumn,[""].concat(colsOf(f.optTable).map(c=>c.name))))+
+    '</div>';
+    if(f.optionSource==="list")s+='<div style="margin-top:8px">'+
+      fld("Values — one per line",'<textarea data-set="filter:'+f.id+':list" placeholder="Open&#10;On hold&#10;Closed">'+esc(f.list)+'</textarea>')+
+    '</div>';
+  }
+  s+='<div class="grp">Default</div><div class="row">'+
+     fld("Starts as",txt("filter:"+f.id+":value",Array.isArray(f.value)?f.value.join(", "):(typeof f.value==="object"?"":f.value),"blank = All"))+
+   '</div>';
+  s+='<div class="grp">Remove</div>'+delButton("this filter");
+  return s+'</div>';
+}
+function filterBarHTML(){
+  let s='<div class="fbar">';
+  if(!doc.filters.length)s+='<div class="hint" style="margin:4px 8px 0">No filters yet — add one and rename it in place.</div>';
+  doc.filters.forEach((f,i)=>{
+    const on=isSel("filter",f.id);
+    const fst=normS(f.style), cst=normS(f.ctrlStyle);
+    const pos=f.labelPos||"top";
+    const wide=["radio","checkbox"].includes(f.control)&&(f.width||"auto")==="auto";
+    const gap=(f.gap===undefined||f.gap==="")?8:+f.gap;
+    const lw=String(f.labelWidth||"").trim(), cw=String(f.ctrlWidth||"").trim();
+    s+='<div class="fchip w-'+(f.width||"auto")+(wide?" w-wide":"")+(on?" sel":"")+
+       '" data-sel="filter" data-id="'+f.id+'"'+(fst.bg?' style="background:'+fst.bg+'"':"")+'>';
+
+    /* the strip that appears on hover or when selected */
+    s+='<div class="ftools">'+
+       '<button data-act="movefilter" data-val="-1" title="Move earlier">&#9664;</button>'+
+       '<span class="fpos">'+(i+1)+'</span>'+
+       '<button data-act="movefilter" data-val="1" title="Move later">&#9654;</button>'+
+       '<span class="sp"></span>'+
+       '<button data-act="cfg" aria-pressed="'+(on&&cfgOpen)+'">&#9881; Set up</button>'+
+       '<button class="warn" data-act="askdel" title="Delete this filter">&#128465;</button></div>';
+
+    s+='<div class="fbody pos-'+pos+'" style="gap:'+gap+'px">';
+    const ldecl=styleDecl(fst,{bg:true}).slice();
+    if(lw)ldecl.push("flex:0 0 "+lw+"px","width:"+lw+"px","max-width:none");
+    s+='<span class="fname'+(pos==="hidden"?" lbl-hidden":"")+'" contenteditable="true" data-edit="filter:'+
+       f.id+':label" data-ph="Label"'+wrapStyle(ldecl)+'>'+esc(f.label)+'</span>';
+    if(f.colon&&pos!=="hidden")s+='<span class="fcolon"'+styleAttr(fst,{bg:true})+'>:</span>';
+    s+='<div class="fctrl"'+(cw?' style="width:'+cw+'px;flex:0 0 '+cw+'px"':"")+'>'+
+       '<div'+styleAttr(cst)+'>'+controlHTML(f)+'</div></div>';
+    s+='</div>';
+
+    if(isPending("filter",f.id))s+=confirmBar("filter",f.id,'the filter "'+(f.label||"Untitled")+'"');
+    else if(on&&cfgOpen)s+=filterCfg(f);
+    s+='</div>';
+  });
+  s+='<div class="fbar-add"><button class="add" data-act="addfilter">+ Filter</button>'+
+     (activeFilters().length?' <button class="add" data-act="clearfilters">Clear</button>':"")+'</div>';
+  return s+'</div>';
+}
+
+/* ------------------------------ SQL preview ------------------------------ */
+/* Shows exactly how the box intends to read its data: the joins, the WHERE
+   you typed, and the conditions the filter bar is contributing right now.
+   Values appear as bound parameters, which is how the Python side sends them. */
+function qcol(src,c){
+  if(!c)return "?";
+  return c.includes(".") ? "`"+c.split(".")[0]+"`.`"+c.split(".").slice(1).join(".")+"`"
+                         : "`"+src.base+"`.`"+c+"`";
+}
+function filterSQL(f){
+  switch(f.control){
+    case "text":      return ["LIKE %s","%"+f.value+"%"];
+    case "daterange":{
+      const o=f.value||{};
+      if(o.from&&o.to)return ["BETWEEN %s AND %s",o.from+"', '"+o.to];
+      return [(o.from?">= %s":"<= %s"),o.from||o.to];
+    }
+    case "checkbox":  return ["IN ("+f.value.map(()=>"%s").join(", ")+")",f.value.join("', '")];
+    default:          return ["= %s",f.value];
+  }
+}
+function opSQL(c){
+  switch(c.op){
+    case "contains": return ["LIKE %s","%"+c.val+"%"];
+    case "starts":   return ["LIKE %s",c.val+"%"];
+    case "in":       return ["IN ("+String(c.val).split(",").map(()=>"%s").join(", ")+")",
+                             String(c.val).split(",").map(x=>x.trim()).join("', '")];
+    case "blank":    return ["IS NULL",null];
+    case "notblank": return ["IS NOT NULL",null];
+    default:         return [c.op+" %s",c.val];
+  }
+}
+function sqlPreview(b){
+  const src=b.src, K=t=>'<span class="kw">'+t+'</span>', C=t=>'<span class="cm">'+esc(t)+'</span>';
+  const params=[];
+  let sel=[],group="",order="",limit="";
+  if(b.kind==="value"){
+    if(b.value.source==="manual")
+      return '<div class="sqlbox">'+C("-- This box shows a number you typed. No query is run.")+'</div>';
+    sel=[b.value.agg+"("+qcol(src,b.value.column)+") "+K("AS")+" value"];
+  }else if(b.kind==="chart"){
+    sel=[qcol(src,b.chart.category)+" "+K("AS")+" category",
+         b.chart.agg+"("+qcol(src,b.chart.column)+") "+K("AS")+" value"];
+    group=qcol(src,b.chart.category);
+    order="value "+(b.chart.dir==="desc"?"DESC":"ASC");
+    if(b.chart.sort==="label")order="category "+(b.chart.dir==="desc"?"DESC":"ASC");
+    if(+b.chart.limit)limit=String(+b.chart.limit);
+  }else if(b.kind==="table"){
+    const cols=b.table.columns.filter(c=>c.on);
+    sel=cols.length?cols.map(c=>qcol(src,c.col)):["*"];
+    if(b.table.sort)order=qcol(src,b.table.sort)+" "+(b.table.dir==="desc"?"DESC":"ASC");
+    limit=String(+b.table.limit||10);
+  }else return "";
+
+  let out=K("SELECT")+" "+sel.join(",\n       ")+"\n"+K("FROM")+"   `"+esc(src.base)+"`";
+  (src.joins||[]).forEach(j=>{
+    if(!j.table){out+="\n"+C("-- incomplete join skipped");return;}
+    out+="\n"+K(j.type==="LEFT"?"LEFT  JOIN":"INNER JOIN")+" `"+esc(j.table)+"` "+K("ON")+" "+
+         qcol(src,j.table+"."+(j.rightCol||"?"))+" = "+qcol(src,j.leftCol||"?");
+    if(!j.leftCol||!j.rightCol)out+="  "+C("-- pick both columns");
+  });
+
+  const lines=[];
+  (src.where||[]).filter(c=>c.col).forEach(c=>{
+    const [frag,val]=opSQL(c);
+    if(val!==null&&val!==""&&val!==undefined)params.push(val);
+    lines.push([qcol(src,c.col)+" "+frag,"your condition"]);
+  });
+  if(b.useFilters)activeFilters().forEach(f=>{
+    const [frag,val]=filterSQL(f);
+    if(val!==null&&val!=="")params.push(val);
+    lines.push([qcol(src,f.column)+" "+frag,"filter bar · "+f.label]);
+  });
+  if(lines.length){
+    const link=(src.whereLink||"AND")==="OR"&&(src.where||[]).filter(c=>c.col).length>1?"OR ":"AND";
+    out+="\n"+K("WHERE")+"  "+lines.map((l,i)=>
+      (i?"\n  "+K(i<=(src.where||[]).filter(c=>c.col).length-1?link:"AND")+"  ":"")+l[0]+
+      "   "+C("-- "+l[1])).join("");
+  }
+  if(group)out+="\n"+K("GROUP BY")+" "+group;
+  if(order)out+="\n"+K("ORDER BY")+" "+order;
+  if(limit)out+="\n"+K("LIMIT")+"  "+limit;
+  if(params.length)out+="\n"+C("-- parameters: "+params.map(v=>"'"+v+"'").join(", "));
+  return '<div class="sqlbox">'+out+'</div>';
+}
+
+/* ------------------------------ source editor ------------------------------ */
+function srcEditor(b){
+  const src=b.src, P="box:"+b.id+":", cols=colOptions(src);
+  if(!TABLES.length)
+    return '<div class="grp">Read from</div><div class="hint">No tables declared yet. '+
+           'Go to <b>All reports &rarr; System settings</b> and add the tables and columns you want '+
+           'to design against.</div>';
+  let s='<div class="grp">Read from</div><div class="row">'+
+    fld("Base table",ddl(P+"src.base",src.base,[""].concat(TABLES)))+
+    fld("Rows available",'<input value="needs a live connection" disabled>')+
+  '</div>';
+
+  s+='<div class="grp">Joins — how the tables are stitched together</div>';
+  (src.joins||[]).forEach((j,i)=>{
+    const J="box:"+b.id+":src.joins."+i+".";
+    const leftCols=colOptions({base:src.base,joins:(src.joins||[]).slice(0,i)}).map(c=>c.name);
+    s+='<div class="joinrow">'+
+      ddl(J+"type",j.type,JOIN_TYPES)+
+      ddl(J+"table",j.table,[""].concat(TABLES.filter(t=>t!==src.base)))+
+      '<span class="eq">on</span>'+
+      ddl(J+"rightCol",j.rightCol,[""].concat(colsOf(j.table).map(c=>c.name)))+
+      ddl(J+"leftCol",j.leftCol,[""].concat(leftCols))+
+      '<button class="xbtn" data-act="deljoin" data-val="'+i+'" title="Remove join">✕</button>'+
+    '</div>';
+  });
+  if(!(src.joins||[]).length)s+='<div class="hint" style="margin:0 0 6px">No join — this box reads <b>'+esc(src.base)+'</b> only.</div>';
+  s+='<button class="add" data-act="addjoin">+ Join a table</button>'+
+     '<div class="hint">Joined columns are named <span class="mono">table.column</span> everywhere below.</div>';
+
+  s+='<div class="grp">Where — conditions you set</div>';
+  (src.where||[]).forEach((c,i)=>{
+    const W="box:"+b.id+":src.where."+i+".";
+    const needsVal=!["blank","notblank"].includes(c.op);
+    s+='<div class="wherow">'+
+      (i===0?'<span class="eq">WHERE</span>':ddl(P+"src.whereLink",src.whereLink||"AND",["AND","OR"]))+
+      ddl(W+"col",c.col,[""].concat(cols.map(x=>x.name)))+
+      ddl(W+"op",c.op,OPS)+
+      (needsVal?txt(W+"val",c.val,c.op==="in"?"a, b, c":"value"):'<span class="eq">—</span>')+
+      '<button class="xbtn" data-act="delwhere" data-val="'+i+'" title="Remove condition">✕</button>'+
+    '</div>';
+  });
+  if(!(src.where||[]).length)s+='<div class="hint" style="margin:0 0 6px">No conditions — every row is included.</div>';
+  s+='<button class="add" data-act="addwhere">+ Condition</button>';
+
+  s+='<div class="grp">The query this box will run</div>'+sqlPreview(b);
+  return s;
+}
+function srcSummary(b){
+  if(b.kind==="note"||(b.kind==="value"&&b.value.source==="manual"))return "";
+  const src=b.src, j=(src.joins||[]).filter(x=>x.table), w=(src.where||[]).filter(x=>x.col);
+  let s='<div class="srcbar"><b>'+esc(src.base||"no table")+'</b>';
+  j.forEach(x=>s+='<span>⋈ '+esc(x.type.toLowerCase())+' '+esc(x.table)+'</span>');
+  if(w.length)s+='<span>· where '+w.length+'</span>';
+  return s+'</div>';
+}
+
+/* ------------------------------ boxes ------------------------------ */
+function boxToolbar(b,cols){
+  return '<div class="btools">'+
+    '<button data-act="cfg" aria-pressed="'+cfgOpen+'" title="Set up this box">&#9881;</button>'+
+    '<button data-act="move" data-val="-1" title="Move earlier">&#8592;</button>'+
+    '<button data-act="move" data-val="1" title="Move later">&#8594;</button>'+
+    '<button data-act="dup" title="Duplicate">&#10697;</button>'+
+    '<button class="warn" data-act="askdel" title="Delete this box">&#10005;</button></div>';
+}
+function boxBody(b){
+  if(b.kind==="value"){
+    const c=b.value;
+    let raw, shown;
+    if(c.source==="manual"){
+      shown='<span contenteditable="true" data-edit="box:'+b.id+':manual" data-ph="0">'+esc(c.manual)+'</span>';
+    }else if(c.source==="formula"){
+      const r=evalFormula(c.formula,b);
+      if(!r.ok)return '<div class="ph"><b>Formula problem</b><span>'+esc(r.error)+'</span></div>';
+      shown=r.value===null?"—":esc(nf(r.value,c.decimals));
+    }else{
+      const rows=resolveRows(b.src,b.useFilters);
+      shown=rows.length?esc(nf(agg(rows,c.agg,c.column),c.decimals)):"—";
+    }
+    let s='<div class="kpi" style="color:'+(c.tone||"#1A2326")+'">'+esc(c.prefix||"")+shown+esc(c.suffix||"")+
+      (c.unit?'<span class="kpi-unit">'+esc(c.unit)+'</span>':"")+'</div>';
+    if(c.delta)s+='<div class="kpi-delta '+c.deltaDir+'">'+
+      (c.deltaDir==="up"?"▲":c.deltaDir==="down"?"▼":"■")+' '+esc(c.delta)+'</div>';
+    if(c.showTrack)s+='<div class="track"><i style="width:'+Math.max(0,Math.min(100,c.trackPct))+'%;background:'+(c.tone||"#0D6E62")+'"></i></div>';
+    if(c.note)s+='<div class="kpi-note">'+esc(c.note)+'</div>';
+    return s;
+  }
+  if(b.kind==="chart"){
+    const c=b.chart;
+    const data=groupAgg(resolveRows(b.src,b.useFilters),c.category,c.agg,c.column,+c.limit||0,c.sort,c.dir);
+    if(!data.length){
+      const n=stateNote(dataState(b.src));
+      const label=(CHARTS.find(x=>x[0]===c.type)||["","Chart"])[1];
+      return placeholder(label+" · "+n[0],n[1],c.height||220);
+    }
+    const pos=c.legendPos||"bottom";
+    if(!c.legend)return '<div class="chartwrap lp-bottom"><div class="chartsvg">'+chartSVG(data,c)+'</div></div>';
+    return '<div class="chartwrap lp-'+pos+'"><div class="chartsvg">'+chartSVG(data,c)+'</div>'+
+           legendHTML(legendItems(data,c),c.palette,pos)+'</div>';
+  }
+  if(b.kind==="table"){
+    const c=b.table, cols=c.columns.filter(x=>x.on);
+    if(!cols.length)return '<div class="empty">No columns selected. Open <b>⚙ Set up</b> and tick some.</div>';
+    let rows=resolveRows(b.src,b.useFilters).slice();
+    if(c.sort)rows.sort((a,z)=>{const x=a[c.sort],y=z[c.sort];
+      const r=typeof x==="number"?x-y:String(x).localeCompare(String(y));return c.dir==="desc"?-r:r;});
+    rows=rows.slice(0,+c.limit||10);
+    let s='<table class="rt"><thead><tr>'+cols.map((col,i)=>{
+      const idx=c.columns.indexOf(col);
+      const hd=styleDecl(normS(c.headStyle)).slice();
+      if(col.width)hd.push("width:"+col.width);
+      return '<th'+wrapStyle(hd)+(col.align==="right"?' class="num"':"")+
+        '><span contenteditable="true" data-edit="col:'+b.id+'#'+idx+':label" data-ph="name">'+esc(col.label)+'</span></th>';
+    }).join("")+'</tr></thead><tbody>';
+    rows.forEach((r,i)=>{
+      s+='<tr'+(c.zebra&&i%2?' class="z"':"")+'>'+cols.map(col=>
+        '<td'+(col.align==="right"?' class="num"':col.align==="center"?' style="text-align:center"':"")+'>'+
+        esc(fmtCell(r[col.col],col.fmt))+'</td>').join("")+'</tr>';
+    });
+    if(!rows.length){
+      const n=stateNote(dataState(b.src));
+      for(let i=0;i<3;i++)
+        s+='<tr class="ghost'+(c.zebra&&i%2?" z":"")+'">'+cols.map(col=>
+          '<td'+(col.align==="right"?' class="num"':"")+'>—</td>').join("")+'</tr>';
+      s+='<tr><td colspan="'+cols.length+'" class="ghost-note">'+esc(n[0])+' · '+esc(n[1])+'</td></tr>';
+    }
+    s+='</tbody>';
+    if(c.totals&&rows.length){
+      s+='<tfoot><tr>'+cols.map((col,i)=>{
+        const isNum=typeof (rows[0]||{})[col.col]==="number";
+        return '<td'+(col.align==="right"?' class="num"':"")+'>'+
+          (i===0?"Total":isNum?esc(fmtCell(rows.reduce((a,r)=>a+(+r[col.col]||0),0),col.fmt)):"")+'</td>';
+      }).join("")+'</tr></tfoot>';
+    }
+    return s+'</table>';
+  }
+  return '<div class="note-body" contenteditable="true" data-edit="box:'+b.id+':note" data-ph="Write a note, a caveat, a definition…">'+b.note.html+'</div>';
+}
+function boxCfg(b,cols){
+  cols=Math.max(1,Math.min(12,+cols||12));
+  let s='<div class="cfg"><div class="cfg-tabs">'+
+    '<button data-act="tab" data-val="data" aria-pressed="'+(cfgTab==="data")+'">Data</button>'+
+    '<button data-act="tab" data-val="format" aria-pressed="'+(cfgTab==="format")+'">Format</button>'+
+    '<button data-act="tab" data-val="border" aria-pressed="'+(cfgTab==="border")+'">Border</button></div>';
+  const P="box:"+b.id+":";
+  if(cfgTab==="border"){
+    s+='<div class="grp">Box border</div>'+frameControls(P+"frame",b.frame,"this box")+
+       '<div class="hint">Off keeps the standard box outline.</div>'+
+       '<div class="grp">Remove</div>'+delButton("this box");
+    return s+'</div>';
+  }
+  if(cfgTab==="format"){
+    if(b.titleVisible)s+=formatPanel(P+"titleStyle",b.titleStyle,"Box title");
+    s+=formatPanel(P+"style",b.style,b.kind==="note"?"Note text":"Content");
+    s+='<div class="grp">Box</div><div class="toggles">'+
+       chk(P+"useFilters",b.useFilters,"Obey the filter bar")+'</div>';
+    if(b.kind==="value")s+='<div class="row">'+
+      fld("Colour",swatches(P+"value.tone",b.value.tone,["#1A2326","#0D6E62","#3B5BA5","#96610A","#9E332B","#5E8C6A"]))+
+      fld("Decimals",ddl(P+"value.decimals",b.value.decimals,[0,1,2],' data-kind="num"'))+'</div>'+
+      '<div class="toggles">'+chk(P+"value.showTrack",b.value.showTrack,"Progress bar")+'</div>'+
+      (b.value.showTrack?'<div class="row">'+fld("Fill %",txt(P+"value.trackPct",b.value.trackPct,"","number"))+'</div>':"");
+    if(b.kind==="chart")s+='<div class="row">'+
+      fld("Height",ddl(P+"chart.height",b.chart.height,[160,200,220,260,320,400,480],' data-kind="num"'))+
+      fld("Colour set",ddl(P+"chart.palette",b.chart.palette,[[0,"Oxide"],[1,"Blue"],[2,"Amber"],[3,"Iron"]],' data-kind="num"'))+
+      '</div><div class="toggles">'+chk(P+"chart.grid",b.chart.grid,"Grid lines")+
+      chk(P+"chart.values",b.chart.values,"Show values")+chk(P+"chart.legend",b.chart.legend,"Legend")+'</div>'+
+      (b.chart.legend?'<div class="row">'+
+        fld("Legend sits",chips(P+"chart.legendPos",b.chart.legendPos||"bottom",
+          [["top","Above"],["bottom","Below"],["right","Right"]]))+'</div>':"")+
+      '<div class="hint">Box width is set in cells from the box toolbar; height is here.</div>';
+    if(b.kind==="table")s+='<div class="toggles">'+chk(P+"table.zebra",b.table.zebra,"Striped rows")+
+      chk(P+"table.totals",b.table.totals,"Total row")+'</div>'+
+      formatPanel(P+"table.headStyle",b.table.headStyle,"Column headings");
+    s+='<div class="grp">Remove</div>'+delButton("this box");
+    return s+'</div>';
+  }
+  /* data tab — name, visibility, what it shows, how wide */
+  s+='<div class="row" style="margin-bottom:2px">'+
+       fld("Box name",txt(P+"title",b.title,"Approval rate"))+
+     '</div>'+
+     '<div class="swblock">'+
+       swtch(P+"visible",b.visible!==false,"Show this box")+
+       swtch(P+"titleVisible",b.titleVisible!==false,"Show box heading")+
+     '</div>'+
+     '<div class="grp">This box shows</div>'+segbar(P+"kind",b.kind,BOX_KINDS)+
+     '<div class="row" style="margin-top:10px">'+
+       fld("Width",ddl(P+"span",Math.max(1,Math.min(cols,+b.span||1)),
+         widthOptions(cols),' data-kind="num"'))+
+     '</div>';
+  if(b.kind==="value"){
+    const c=b.value;
+    s+=chips(P+"value.source",c.source,
+      [["data","One aggregate"],["formula","An Excel formula"],["manual","A number I type"]]);
+    if(c.source==="formula"){
+      const r=evalFormula(c.formula,b);
+      const cols=colOptions(b.src).map(x=>x.name);
+      s+='<div style="margin-top:9px">'+
+        fld("Formula",'<textarea data-set="'+P+'value.formula" placeholder="=ROUND(SUM(net) / COUNT(invoice_no), 2)">'+
+          esc(c.formula)+'</textarea>')+'</div>';
+      s+=(String(c.formula||"").trim()
+        ? (r.ok?'<div class="fx ok">Parses cleanly'+
+                 (r.value===null?" — it will compute once the database is connected.":" = "+esc(nf(r.value,c.decimals)))+'</div>'
+              :'<div class="fx bad">'+esc(r.error)+'</div>')
+        : '<div class="hint">Start with <span class="mono">=</span>, or without it.</div>');
+      s+='<div class="hint" style="margin-top:7px"><b>Functions:</b> <span class="mono">'+FORMULA_HELP+'</span></div>';
+      s+='<div class="hint"><b>Columns:</b> '+(cols.length
+        ? '<span class="mono">'+cols.map(esc).join(" · ")+'</span>'
+        : 'pick a table below first')+'</div>';
+      s+='<div class="hint"><b>Other boxes:</b> reference by title in brackets, '+
+         'e.g. <span class="mono">[Gross spend]</span>.</div>';
+      s+=srcEditor(b);
+    }
+    else if(c.source==="data"){
+      s+='<div class="row" style="margin-top:9px">'+
+        fld("Aggregate",ddl(P+"value.agg",c.agg,AGGS))+
+        fld("Of column",ddl(P+"value.column",c.column,colOptions(b.src).map(x=>x.name)))+'</div>';
+      s+=srcEditor(b);
+    }
+    else s+='<div class="hint" style="margin:8px 0 2px">Click the number in the box and type over it.</div>';
+    s+='<div class="grp">Presentation</div><div class="row">'+
+      fld("Prefix",txt(P+"value.prefix",c.prefix,"₹"))+
+      fld("Suffix",txt(P+"value.suffix",c.suffix,"%"))+
+      fld("Unit note",txt(P+"value.unit",c.unit,"per month"))+'</div>'+
+      '<div class="row">'+
+      fld("Change label",txt(P+"value.delta",c.delta,"12.4% vs last quarter"))+
+      fld("Direction",chips(P+"value.deltaDir",c.deltaDir,[["up","▲"],["down","▼"],["flat","■"]]))+'</div>'+
+      '<div class="row">'+fld("Footnote",txt(P+"value.note",c.note,"Excludes cancelled orders"))+'</div>';
+  }
+  if(b.kind==="chart"){
+    const c=b.chart;
+    s+=chips(P+"chart.type",c.type,CHARTS);
+    s+='<div class="row" style="margin-top:9px">'+
+      fld("Group by",ddl(P+"chart.category",c.category,colOptions(b.src).map(x=>x.name)))+
+      fld("Aggregate",ddl(P+"chart.agg",c.agg,AGGS))+
+      fld("Of column",ddl(P+"chart.column",c.column,colOptions(b.src).map(x=>x.name)))+'</div>'+
+      '<div class="row">'+
+      fld("Sort by",ddl(P+"chart.sort",c.sort,[["value","Value"],["label","Name"]]))+
+      fld("Order",ddl(P+"chart.dir",c.dir,[["desc","High → low"],["asc","Low → high"]]))+
+      fld("Keep top",ddl(P+"chart.limit",c.limit,[[0,"All"],5,6,8,10,12],' data-kind="num"'))+'</div>';
+    s+=srcEditor(b);
+  }
+  if(b.kind==="table"){
+    const c=b.table;
+    s+='<div class="row">'+
+      fld("Rows",ddl(P+"table.limit",c.limit,[5,8,10,15,25,50],' data-kind="num"'))+
+      fld("Sort by",ddl(P+"table.sort",c.sort,[""].concat(c.columns.map(x=>x.col))))+
+      fld("Order",ddl(P+"table.dir",c.dir,[["asc","A → Z"],["desc","Z → A"]]))+'</div>';
+    s+='<div class="grp">Columns — order, tick, rename, format</div><div class="collist">'+
+      c.columns.map((col,i)=>'<div class="colrow">'+
+        '<span class="colmv">'+
+          '<button class="xbtn" data-act="colmove" data-val="'+i+':-1" title="Move up">&#8593;</button>'+
+          '<button class="xbtn" data-act="colmove" data-val="'+i+':1" title="Move down">&#8595;</button>'+
+        '</span>'+
+        '<input type="checkbox" data-set="col:'+b.id+'#'+i+':on" data-kind="bool"'+(col.on?" checked":"")+'>'+
+        '<span><input type="text" data-set="col:'+b.id+'#'+i+':label" value="'+esc(col.label)+'">'+
+        '<div class="cn">'+esc(col.col)+'</div></span>'+
+        ddl("col:"+b.id+"#"+i+":fmt",col.fmt,FMTS)+
+        ddl("col:"+b.id+"#"+i+":align",col.align,[["left","Left"],["center","Centre"],["right","Right"]])+
+        txt("col:"+b.id+"#"+i+":width",col.width,"auto")+
+      '</div>').join("")+'</div>'+
+      '<div class="hint">Headings are also editable straight in the rendered table.</div>';
+    s+=srcEditor(b);
+  }
+  if(b.kind==="note")s+='<div class="hint">Click into the box and type. Use <b>Format</b> for size, colour and alignment.</div>';
+  s+='<div class="grp">Remove</div>'+delButton("this box");
+  return s+'</div>';
+}
+function boxHTML(b,cols){
+  cols=cols||12;
+  const on=isSel("box",b.id);
+  const span=Math.max(1,Math.min(cols,+b.span||1));
+  const bf=frameCSS(b.frame);
+  let s='<div class="box'+(b.frame&&b.frame.on?" framed":"")+(b.visible===false?" boxoff":"")+(on?" sel":"")+
+        '" style="grid-column:span '+span+
+        (b.style.bg?";background:"+b.style.bg:"")+(b.style.align?";text-align:"+b.style.align:"")+
+        (bf?";"+bf:"")+'" data-sel="box" data-id="'+b.id+'">';
+  if(on)s+=boxToolbar(b,cols);
+  if(b.titleVisible)s+='<div class="box-title" contenteditable="true" data-edit="box:'+b.id+
+    ':title" data-ph="Unnamed box"'+styleAttr(normS(b.titleStyle))+'>'+esc(b.title)+'</div>';
+  if(mode==="design")s+=srcSummary(b);
+  s+='<div'+styleAttr(Object.assign({},b.style,{bg:"",align:""}))+'>'+boxBody(b)+'</div>';
+  if(isPending("box",b.id))s+=confirmBar("box",b.id,'the box "'+(b.title||"Untitled")+'"');
+  else if(on&&cfgOpen)s+=boxCfg(b,cols);
+  return s+'</div>';
+}
+
+/* ------------------------------ sections ------------------------------ */
+function sectionCfg(sc){
+  const P="section:"+sc.id+":";
+  let s='<div class="cfg" style="margin-bottom:12px"><div class="cfg-tabs">'+
+    '<button data-act="tab" data-val="data" aria-pressed="'+(cfgTab==="data")+'">Headings</button>'+
+    '<button data-act="tab" data-val="format" aria-pressed="'+(cfgTab==="format")+'">Format</button>'+
+    '<button data-act="tab" data-val="border" aria-pressed="'+(cfgTab==="border")+'">Border</button></div>';
+  if(cfgTab==="format"){
+    s+=formatPanel(P+"style",sc.style,"Section name")+
+       formatPanel(P+"descStyle",sc.descStyle,"Sub-heading")+
+       '<div class="grp">Remove</div>'+delButton("this section");
+    return s+'</div>';
+  }
+  if(cfgTab==="border"){
+    s+='<div class="grp">Section border</div>'+frameControls(P+"frame",sc.frame,"this section")+
+       '<div class="hint">The border wraps the whole section, so every box you add sits inside it.</div>'+
+       '<div class="grp">Remove</div>'+delButton("this section");
+    return s+'</div>';
+  }
+  s+='<div class="grp">Section name</div><div class="row">'+
+       fld("Name",txt(P+"name",sc.name,"Headlines"))+
+     '</div>'+
+     '<div class="toggles">'+chk(P+"nameVisible",sc.nameVisible!==false,"Show the name")+
+       chk(P+"rule",sc.rule!==false,"Show the rule under it")+'</div>'+
+     '<div class="grp">Sub-heading</div><div class="row">'+
+       fld("Sub-heading",txt(P+"desc",sc.desc,"A line under the section name"))+
+     '</div>'+
+     '<div class="toggles">'+chk(P+"subVisible",sc.subVisible!==false,"Show the sub-heading")+'</div>'+
+     '<div class="hint">Hidden headings stay here, struck through, so you can still edit them. '+
+       'They are dropped from Preview and from the published report.</div>'+
+     '<div class="grp">Boxes per row</div>'+
+     chips(P+"cols",Math.max(1,Math.min(12,+sc.cols||4)),
+       [[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"],[6,"6"]])+
+     '<div class="row" style="margin-top:8px">'+
+       fld("Or a custom number (1&ndash;12)",txt(P+"cols",sc.cols,"4","number"))+
+     '</div>'+
+     '<div class="hint">Each box is then sized in cells &mdash; 1 cell, 2 cells and so on &mdash; '+
+       'from its own toolbar.</div>'+
+     '<div class="grp">Remove</div>'+delButton("this section");
+  return s+'</div>';
+}
+function sectionHTML(sc){
+  const on=isSel("section",sc.id);
+  const fcss=frameCSS(sc.frame);
+  let s='<div class="sec'+(sc.frame&&sc.frame.on?" framed":"")+(on?" sel":"")+
+        '" data-sel="section" data-id="'+sc.id+'"'+(fcss?' style="'+fcss+'"':"")+'>';
+  if(mode==="design")s+='<div class="tools sectools">'+
+    '<span class="tlabel">Section</span>'+
+    '<button data-act="cfg" aria-pressed="'+(on&&cfgOpen)+'">&#9881; Set up</button>'+
+    '<span class="sp"></span>'+
+    '<button data-act="move" data-val="-1" title="Move up">&#8593;</button>'+
+    '<button data-act="move" data-val="1" title="Move down">&#8595;</button>'+
+    '<button data-act="dup">&#9099; Copy</button>'+
+    '<button class="warn" data-act="askdel" title="Delete this section">&#128465; Delete</button></div>';
+  const nst=normS(sc.style), dst=normS(sc.descStyle);
+  const nameOff=sc.nameVisible===false, subOff=sc.subVisible===false;
+  if(mode==="design"){
+    const idx=doc.sections.findIndex(x=>x.id===sc.id)+1;
+    s+='<div class="secidx">Section '+String(idx).padStart(2,"0")+'</div>';
+  }
+  s+='<div class="sec-head'+(nameOff?" lbl-hidden":"")+'"'+(nst.align?' style="justify-content:'+
+     (nst.align==="center"?"center":nst.align==="right"?"flex-end":"flex-start")+'"':"")+'>'+
+     ce("section:"+sc.id+":name",sc.name,"sec-name","Untitled section",nst)+'</div>';
+  if(sc.rule!==false&&!nameOff)s+='<div class="sec-rule"'+(nst.color?' style="background:'+nst.color+
+     (nst.align==="center"?";margin-left:auto;margin-right:auto":nst.align==="right"?";margin-left:auto":"")+'"':
+     (nst.align==="center"?' style="margin-left:auto;margin-right:auto"':nst.align==="right"?' style="margin-left:auto"':""))+'></div>';
+  s+=ce("section:"+sc.id+":desc",sc.desc,"sec-desc"+(subOff?" lbl-hidden":""),"Sub-heading",dst);
+  if(on&&cfgOpen&&mode==="design")s+=sectionCfg(sc);
+  if(isPending("section",sc.id))
+    s+=confirmBar("section",sc.id,'the section "'+(sc.name||"Untitled")+'"',
+      sc.boxes.length?"Its "+sc.boxes.length+" box"+(sc.boxes.length>1?"es":"")+" will go with it.":"");
+  const cols=Math.max(1,Math.min(12,+sc.cols||4));
+  s+='<div class="grid" style="grid-template-columns:repeat('+cols+',minmax(0,1fr))">'+
+     sc.boxes.map(b=>boxHTML(b,cols)).join("")+'</div>';
+  if(!sc.boxes.length)s+='<div class="empty">Nothing here yet — add a box below.</div>';
+  s+='<div class="secadd" data-sec="'+sc.id+'">'+
+     '<button class="addbox" data-act="addbox">+ Add a box to '+
+     '&ldquo;'+esc(sc.name||"this section")+'&rdquo;</button></div>';
+  return s+'</div>';
+}
+
+/* The report carries no editable heading block — its name is the process name,
+   set in the bar above, and printed once when the report is being read. */
+function titleLine(){
+  const on=isSel("doc","doc"), st=normS(doc.nameStyle);
+  let s='<div class="rep-name-wrap'+(on?" sel":"")+'" data-sel="doc" data-id="doc"'+
+        (st.align?' style="text-align:'+st.align+'"':"")+'>';
+  if(on&&mode==="design")s+='<div class="tools">'+
+    '<button data-act="cfg" aria-pressed="'+cfgOpen+'">&#9881; Format</button>'+
+    '<span class="sp"></span>'+
+    '<button data-setbtn="doc::nameStyle.bold" data-val="'+(st.bold?"":"true")+
+      '" aria-pressed="'+(!!st.bold)+'" style="font-weight:700">B</button>'+
+    '<button data-setbtn="doc::nameStyle.italic" data-val="'+(st.italic?"":"true")+
+      '" aria-pressed="'+(!!st.italic)+'" style="font-style:italic">I</button>'+
+    '<button data-setbtn="doc::nameStyle.underline" data-val="'+(st.underline?"":"true")+
+      '" aria-pressed="'+(!!st.underline)+'" style="text-decoration:underline">U</button>'+
+    '<span class="sp"></span>'+
+    ALIGNS.slice(1).map(a=>'<button data-setbtn="doc::nameStyle.align" data-val="'+a[0]+
+      '" aria-pressed="'+(st.align===a[0])+'">'+a[1]+'</button>').join("")+
+    '</div>';
+  s+='<div class="rep-name" contenteditable="true" data-edit="doc::name" data-ph="Name this report"'+
+     styleAttr(st,{align:true})+'>'+esc(doc.name||"")+'</div>';
+  if(on&&cfgOpen&&mode==="design")
+    s+='<div class="cfg" style="text-align:left">'+formatPanel("doc::nameStyle",st,"Report name")+
+       '<div class="grp">Report</div><div class="row">'+
+       fld("Numbers",ddl("doc::numberFormat",doc.numberFormat,
+         [["en-IN","Indian — 12,34,567"],["en-US","International — 1,234,567"]]))+
+       '</div></div>';
+  return s+'</div>';
+}
+
+/* ------------------------------ render ------------------------------ */
+const canvas=document.getElementById("canvas");
+function render(){
+  canvas.innerHTML=titleLine()+filterBarHTML()+doc.sections.map(sectionHTML).join("")+
+    '<div class="addbar"><button class="add big" data-act="addsection">+ Section</button></div>';
+}
+
+/* ------------------------------ path resolution ------------------------------ */
+function baseOf(kind,id){
+  if(kind==="doc")return doc;
+  if(kind==="filter")return doc.filters.find(f=>f.id===id);
+  if(kind==="section")return doc.sections.find(s=>s.id===id);
+  if(kind==="box"){for(const s of doc.sections){const b=s.boxes.find(x=>x.id===id);if(b)return b;}return null;}
+  if(kind==="col"){
+    const [bid,idx]=id.split("#");
+    for(const s of doc.sections){const b=s.boxes.find(x=>x.id===bid);
+      if(b&&b.table)return b.table.columns[+idx];}
+  }
+  return null;
+}
+function setDeep(o,path,v){
+  const p=path.split(".");
+  while(p.length>1){const k=p.shift();o=o[/^\d+$/.test(k)?+k:k];if(!o)return;}
+  o[p[0]]=v;
+}
+function getDeep(o,path){return path.split(".").reduce((a,k)=>a==null?a:a[k],o);}
+function parseTarget(t){
+  const i=t.indexOf(":"),j=t.indexOf(":",i+1);
+  return {kind:t.slice(0,i),id:t.slice(i+1,j),path:t.slice(j+1)};
+}
+function coerce(path,raw,kind){
+  if(kind==="bool")return !!raw;
+  if(kind==="num")return raw===""?null:Number(raw);
+  if(/(^|\.)(bold|italic|underline)$/.test(path))return raw===""?null:raw==="true";
+  if(path.endsWith(".size")||path==="size")return raw===""?null:Number(raw);
+  if(/(limit|height|palette|decimals|trackPct)$/.test(path))return raw===""?0:Number(raw);
+  return raw;
+}
+/* keep dependent fields sane when a table or control changes */
+function afterSet(kind,id,path){
+  const o=baseOf(kind,id);
+  if(!o)return;
+  if(kind==="filter"){
+    if(path==="table"){o.column=(colsOf(o.table)[0]||{}).name||"";}
+    if(path==="optTable"){o.optColumn=(colsOf(o.optTable)[0]||{}).name||"";}
+    if(path==="control"){o.value=o.control==="checkbox"?[]:o.control==="daterange"?{}:"";}
+    if(path==="value"&&o.control==="checkbox"&&typeof o.value==="string")
+      o.value=o.value.split(",").map(s=>s.trim()).filter(Boolean);
+  }
+  if(kind==="section"&&path==="cols"){
+    const n=Math.max(1,Math.min(12,+o.cols||4));
+    o.cols=n;
+    o.boxes.forEach(b=>{b.span=Math.max(1,Math.min(n,+b.span||1));});
+  }
+  if(kind==="box"){
+    if(path==="kind"){ensureConfigs(o);if(o.src.base)applyDefaults(o);}
+    if(path==="span")o.span=Math.max(1,+o.span||1);
+    if(path==="src.base"){
+      o.src.joins=[];o.src.where=[];
+      applyDefaults(o);
+    }
+    if(/^src\.joins\.\d+\.table$/.test(path)){
+      const i=+path.split(".")[2], j=o.src.joins[i];
+      j.leftCol="";j.rightCol="";
+      /* offer a sensible default: a column name the two sides share */
+      const left=colOptions({base:o.src.base,joins:o.src.joins.slice(0,i)}).map(c=>c.name);
+      const shared=colsOf(j.table).map(c=>c.name).find(c=>left.includes(c));
+      if(shared){j.leftCol=shared;j.rightCol=shared;}
+    }
+    if(/^src\.where\.\d+\.op$/.test(path)){
+      const i=+path.split(".")[2];
+      if(["blank","notblank"].includes(o.src.where[i].op))o.src.where[i].val="";
+    }
+  }
+}
+
+/* ------------------------------ selection + focus ------------------------------ */
+let pendingFocus=null;
+function afterRender(){
+  if(!pendingFocus)return;
+  const el=canvas.querySelector('[data-edit="'+CSS.escape(pendingFocus)+'"]');
+  pendingFocus=null;
+  if(!el)return;
+  el.focus();
+  const r=document.createRange();r.selectNodeContents(el);r.collapse(false);
+  const s=window.getSelection();s.removeAllRanges();s.addRange(r);
+}
+function draw(){render();afterRender();}
+function select(kind,id,focusPath){
+  if(sel&&sel.kind===kind&&sel.id===id)return false;
+  sel={kind,id};cfgOpen=false;cfgTab="data";pendingDel=null;pendingFocus=focusPath||null;
+  draw();return true;
+}
+
+/* ------------------------------ events ------------------------------ */
+canvas.addEventListener("mousedown",e=>{
+  if(mode==="preview")return;
+  if(e.target.closest("[data-act],[data-set],[data-setbtn],[data-fv]"))return;
+  const host=e.target.closest("[data-sel]");
+  if(!host)return;
+  const ed=e.target.closest("[data-edit]");
+  if(select(host.dataset.sel,host.dataset.id,ed?ed.dataset.edit:null)&&ed)e.preventDefault();
+});
+
+/* inline text edits — update the model quietly, never re-render mid-typing */
+canvas.addEventListener("input",e=>{
+  const el=e.target.closest("[data-edit]");
+  if(!el)return;
+  if(el.dataset.edit==="doc::name"){
+    doc.name=el.textContent;
+    if(typeof current!=="undefined"&&current)current.name=doc.name.trim()||"Untitled report";
+    return;
+  }
+  const {kind,id,path}=parseTarget(el.dataset.edit);
+  const o=baseOf(kind,id);
+  if(!o)return;
+  if(kind==="box"&&path==="note"){o.note.html=el.innerHTML;return;}
+  if(kind==="box"&&path==="manual"){o.value.manual=el.textContent;return;}
+  setDeep(o,path,el.textContent);
+  /* mirror into the matching panel input so the two never disagree */
+  const twin=canvas.querySelector('[data-set="'+el.dataset.edit+'"]');
+  if(twin&&twin.value!==el.textContent)twin.value=el.textContent;
+});
+canvas.addEventListener("keydown",e=>{
+  const el=e.target.closest("[data-edit]");
+  if(el&&e.key==="Enter"&&!el.classList.contains("note-body")){e.preventDefault();el.blur();}
+  if(e.key==="Escape"){sel=null;cfgOpen=false;pendingDel=null;draw();}
+});
+canvas.addEventListener("blur",e=>{
+  const el=e.target.closest&&e.target.closest("[data-edit]");
+  if(el&&el.dataset.edit.startsWith("col:"))draw();   // header rename → refresh the setup list
+},true);
+
+/* form controls inside config panels */
+canvas.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.fpos!==undefined){
+    const i=doc.filters.findIndex(x=>x.id===t.dataset.fpos), j=+t.value;
+    if(i>=0&&j>=0&&j<doc.filters.length)doc.filters.splice(j,0,doc.filters.splice(i,1)[0]);
+    draw();return;
+  }
+  if(t.dataset.fv!==undefined){applyFilterValue(t);return;}
+  const path=t.dataset.set;
+  if(!path)return;
+  const {kind,id,path:p}=parseTarget(path);
+  const o=baseOf(kind,id);
+  if(!o)return;
+  const raw=t.type==="checkbox"?t.checked:t.value;
+  setDeep(o,p,coerce(p,raw,t.dataset.kind||(t.type==="checkbox"?"bool":"")));
+  afterSet(kind,id,p);
+  draw();
+});
+function applyFilterValue(t){
+  const f=doc.filters.find(x=>x.id===t.dataset.fv);
+  if(!f)return;
+  if(t.dataset.multi){
+    const box=t.closest(".fchip");
+    f.value=[...box.querySelectorAll('[data-fv="'+f.id+'"]:checked')].map(i=>i.value);
+  }else if(t.dataset.part){
+    f.value=Object.assign({},typeof f.value==="object"&&f.value?f.value:{},{[t.dataset.part]:t.value});
+  }else f.value=t.value;
+  draw();
+}
+
+/* clicks: actions and chip/swatch buttons */
+canvas.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-setbtn]");
+  if(btn){
+    const {kind,id,path}=parseTarget(btn.dataset.setbtn);
+    const o=baseOf(kind,id);
+    if(o){setDeep(o,path,coerce(path,btn.dataset.val,""));afterSet(kind,id,path);draw();}
+    return;
+  }
+  const a=e.target.closest("[data-act]");
+  if(!a)return;
+  const host=a.closest("[data-sel]");
+  const act=a.dataset.act, val=a.dataset.val;
+  if(host&&(!sel||sel.id!==host.dataset.id))
+    {sel={kind:host.dataset.sel,id:host.dataset.id};cfgOpen=false;}
+
+  switch(act){
+    case "askdel":   pendingDel={kind:host.dataset.sel,id:host.dataset.id};break;
+    case "delno":    pendingDel=null;break;
+    case "delyes":{
+      const k=pendingDel&&pendingDel.kind, id=pendingDel&&pendingDel.id;
+      if(k==="filter")doc.filters=doc.filters.filter(f=>f.id!==id);
+      if(k==="section")doc.sections=doc.sections.filter(x=>x.id!==id);
+      if(k==="box")doc.sections.forEach(x=>x.boxes=x.boxes.filter(y=>y.id!==id));
+      pendingDel=null;sel=null;cfgOpen=false;
+      toast(k.charAt(0).toUpperCase()+k.slice(1)+" deleted.");
+      break;
+    }
+    case "addjoin":{
+      const b=baseOf("box",host.dataset.id);
+      if(b){b.src.joins=b.src.joins||[];b.src.joins.push({type:"LEFT",table:"",leftCol:"",rightCol:""});}
+      break;
+    }
+    case "deljoin":{
+      const b=baseOf("box",host.dataset.id);
+      if(b)b.src.joins.splice(+val,1);
+      break;
+    }
+    case "addwhere":{
+      const b=baseOf("box",host.dataset.id);
+      if(b){b.src.where=b.src.where||[];b.src.where.push({col:"",op:"=",val:""});}
+      break;
+    }
+    case "delwhere":{
+      const b=baseOf("box",host.dataset.id);
+      if(b)b.src.where.splice(+val,1);
+      break;
+    }
+    case "movefilter":{
+      const i=doc.filters.findIndex(x=>x.id===host.dataset.id), j=i+(+val);
+      if(i>=0&&j>=0&&j<doc.filters.length)
+        doc.filters.splice(j,0,doc.filters.splice(i,1)[0]);
+      break;
+    }
+    case "cfg":      cfgOpen=!cfgOpen;break;
+    case "tab":      cfgTab=val;break;
+    case "addfilter":{
+      const f=newFilter();doc.filters.push(f);
+      sel={kind:"filter",id:f.id};cfgOpen=true;cfgTab="data";
+      pendingFocus="filter:"+f.id+":label";break;
+    }
+    case "clearfilters":doc.filters.forEach(f=>f.value=f.control==="checkbox"?[]:f.control==="daterange"?{}:"");break;
+    case "addsection":{
+      const s=newSection();doc.sections.push(s);
+      sel={kind:"section",id:s.id};cfgOpen=true;cfgTab="data";
+      pendingFocus="section:"+s.id+":name";break;
+    }
+    case "addbox":{
+      const sid=a.closest("[data-sec]").dataset.sec;
+      const s=doc.sections.find(x=>x.id===sid);
+      const b=newBox("value");
+      s.boxes.push(b);sel={kind:"box",id:b.id};cfgOpen=true;cfgTab="data";
+      pendingFocus="box:"+b.id+":title";break;
+    }
+    case "span":{const b=baseOf("box",host.dataset.id);if(b)b.span=+val;break;}
+    case "colmove":{
+      const b=baseOf("box",host.dataset.id);
+      if(b&&b.table){
+        const [i,d]=String(val).split(":").map(Number), j=i+d;
+        if(j>=0&&j<b.table.columns.length)
+          b.table.columns.splice(j,0,b.table.columns.splice(i,1)[0]);
+      }
+      break;
+    }
+    case "move":{
+      const d=+val;
+      if(host.dataset.sel==="section"){
+        const i=doc.sections.findIndex(s=>s.id===host.dataset.id),j=i+d;
+        if(j>=0&&j<doc.sections.length)[doc.sections[i],doc.sections[j]]=[doc.sections[j],doc.sections[i]];
+      }else{
+        for(const s of doc.sections){
+          const i=s.boxes.findIndex(b=>b.id===host.dataset.id);
+          if(i<0)continue;
+          const j=i+d;
+          if(j>=0&&j<s.boxes.length)[s.boxes[i],s.boxes[j]]=[s.boxes[j],s.boxes[i]];
+          break;
+        }
+      }
+      break;
+    }
+    case "dup":{
+      if(host.dataset.sel==="section"){
+        const i=doc.sections.findIndex(s=>s.id===host.dataset.id);
+        const c=JSON.parse(JSON.stringify(doc.sections[i]));
+        c.id=uid("sec");c.boxes.forEach(b=>b.id=uid("box"));
+        doc.sections.splice(i+1,0,c);sel={kind:"section",id:c.id};
+      }else{
+        for(const s of doc.sections){
+          const i=s.boxes.findIndex(b=>b.id===host.dataset.id);
+          if(i<0)continue;
+          const c=JSON.parse(JSON.stringify(s.boxes[i]));c.id=uid("box");
+          s.boxes.splice(i+1,0,c);sel={kind:"box",id:c.id};break;
+        }
+      }
+      break;
+    }
+    default:return;
+  }
+  draw();
+});
+document.addEventListener("mousedown",e=>{
+  if(screen!=="editor")return;
+  if(!e.target.closest("#canvas")){sel=null;cfgOpen=false;pendingDel=null;draw();}
+});
+
+/* ==========================================================================
+   v5 shell — a home screen with two cards, and an editor you enter from it.
+   No menu bar: New and Edit come from the list, Preview and Publish live in
+   the editor, and the database lives in System settings.
+   ========================================================================== */
+function toast(msg){
+  const t=document.createElement("div");t.className="toast";t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2400);
+}
+
+/* ---------------- workspace + storage ----------------
+   window.storage when the host provides it; otherwise the workspace lives in
+   memory for the session and "Export everything" is how you keep it. */
+const SKEY="nexd:workspace:v5";
+let W={reports:[],connections:[],defaults:{numberFormat:"en-IN",maxRows:5000,timeoutMs:15000},
+       openConn:null,pendingDelRep:null,pendingDelConn:null};
+const hasStore=typeof window!=="undefined"&&window.storage&&typeof window.storage.get==="function";
+let storeWarned=false;
+async function loadW(){
+  if(!hasStore)return;
+  try{
+    const r=await window.storage.get(SKEY);
+    if(r&&r.value){
+      const v=JSON.parse(r.value);
+      W.reports=(v.reports||[]).map(x=>Object.assign({},x,{doc:migrate(x.doc)}));
+      W.connections=v.connections||[];
+      W.defaults=Object.assign(W.defaults,v.defaults||{});
+      SCHEMA=v.schema||{tables:[]};syncTables();
+    }
+  }catch(e){/* nothing stored yet */}
+}
+let saveTimer=null;
+function saveW(){
+  if(!hasStore){
+    if(!storeWarned){storeWarned=true;
+      toast("No storage here — use Export everything to keep your work.");}
+    return;
+  }
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{
+    try{
+      await window.storage.set(SKEY,JSON.stringify(
+        {reports:W.reports,connections:W.connections,defaults:W.defaults,schema:SCHEMA}));
+    }catch(e){toast("Could not save — "+e.message);}
+  },250);
+}
+
+const newKey=()=>"rpt_"+Math.random().toString(36).slice(2,9);
+const newToken=()=>Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
+function countOf(d){
+  const secs=(d&&d.sections)||[], flt=(d&&d.filters)||[];
+  const b=secs.reduce((a,s)=>a+((s.boxes||[]).length),0);
+  return secs.length+" section"+(secs.length===1?"":"s")+" · "+
+         b+" box"+(b===1?"":"es")+" · "+flt.length+" filter"+(flt.length===1?"":"s");
+}
+function whenTxt(t){
+  if(!t)return "never saved";
+  const d=(Date.now()-t)/1000;
+  if(d<60)return "just now";
+  if(d<3600)return Math.floor(d/60)+" min ago";
+  if(d<86400)return Math.floor(d/3600)+" hr ago";
+  return new Date(t).toLocaleDateString();
+}
+function migrate(d){
+  d=Object.assign(blankDoc(),d||{});
+  if(d.heading&&d.heading.title&&(!d.name||d.name==="Untitled report"))d.name=d.heading.title;
+  delete d.heading;
+  d.nameStyle=normS(d.nameStyle);
+  (d.filters||[]).forEach(f=>{
+    f.style=normS(f.style);f.ctrlStyle=normS(f.ctrlStyle);
+    f.labelPos=f.labelPos||"top";f.width=f.width||"auto";
+    if(f.colon===undefined)f.colon=false;
+    if(f.gap===undefined)f.gap=8;
+    f.labelWidth=f.labelWidth||"";f.ctrlWidth=f.ctrlWidth||"";f.placeholder=f.placeholder||"";
+  });
+  (d.sections||[]).forEach(sc=>{
+    sc.style=normS(sc.style);sc.descStyle=normS(sc.descStyle);
+    if(sc.rule===undefined)sc.rule=true;
+    if(sc.cols===undefined)sc.cols=12;      /* older files were always a 12-column grid */
+    if(sc.nameVisible===undefined)sc.nameVisible=true;
+    if(sc.subVisible===undefined)sc.subVisible=true;
+    sc.frame=F(sc.frame);
+    (sc.boxes||[]).forEach(b=>{
+      b.style=normS(b.style);b.titleStyle=normS(b.titleStyle);b.frame=F(b.frame);
+      if(b.table)b.table.headStyle=normS(b.table.headStyle);
+      if(b.visible===undefined)b.visible=true;
+      ensureConfigs(b);
+      if(b.value&&b.value.formula===undefined)b.value.formula="";
+      if(b.chart&&!b.chart.legendPos)b.chart.legendPos="bottom";
+    });
+  });
+  (d.sections||[]).forEach(sc=>(sc.boxes||[]).forEach(b=>{
+    if(!b.src){
+      const t=(b.value&&b.value.table)||(b.chart&&b.chart.table)||(b.table&&b.table.table)||"";
+      b.src=newSrc(t);
+    }
+    b.src.joins=b.src.joins||[];b.src.where=b.src.where||[];b.src.whereLink=b.src.whereLink||"AND";
+  }));
+  return d;
+}
+
+/* ---------------- screens ---------------- */
+const VIEWS={reports:"vReports",settings:"vSettings",editor:"vEditor"};
+let screen="reports", current=null;   // current = the report record being edited
+let saveMsg="";
+
+const pbtn=(h,label,pressed,cls)=>'<button class="pb'+(cls?" "+cls:"")+'" data-h="'+h+'"'+
+  (pressed===undefined?"":' aria-pressed="'+!!pressed+'"')+'>'+label+'</button>';
+
+function pagebarHTML(){
+  let b="";
+  if(screen==="editor"){
+    b+=pbtn("viewReports","Reports / Dashboards")+pbtn("viewSettings","System Settings");
+    b+='<span class="pbsep"></span>';
+    b+=pbtn("design","Design",mode==="design")+pbtn("preview","Preview",mode==="preview");
+    b+=pbtn("save","Save");
+    b+=current&&current.published
+        ? pbtn("publish","Unpublish",undefined,"live")
+        : pbtn("publish","Publish",undefined,"go");
+    b+=pbtn("closeEditor","Close");
+  }else{
+    b+=pbtn("new","New",undefined,"go");
+    b+=pbtn("viewReports","Reports / Dashboards",screen==="reports");
+    b+=pbtn("viewSettings","System Settings",screen==="settings");
+  }
+  return b+'<span class="espacer"></span><span id="saveState" class="sstate">'+esc(saveMsg)+'</span>';
+}
+function drawPagebar(){document.getElementById("pagebar").innerHTML=pagebarHTML();}
+
+function show(which){
+  screen=which;
+  Object.keys(VIEWS).forEach(k=>{
+    const el=document.getElementById(VIEWS[k]);
+    if(el)el.hidden=(k!==which);
+  });
+  const pb=document.getElementById("pubBar");
+  if(which!=="editor"&&pb)pb.hidden=true;
+  if(which!=="editor")saveMsg="";
+  window.scrollTo(0,0);
+  if(which!=="editor")drawHome();
+  else drawPub();
+  drawPagebar();
+}
+/* leaving the editor always banks the work first */
+function leaveEditor(to){
+  if(current&&dirty)saveReport(true);
+  current=null;show(to||"reports");
+}
+
+/* ---------------- home · card 1: reports ---------------- */
+function repListHTML(){
+  if(!W.reports.length)
+    return '<div class="nothing">Nothing here yet.<br><br>'+
+           '<button class="pb go" data-h="new">New</button></div>';
+  return W.reports.map(r=>{
+    if(W.pendingDelRep===r.key)
+      return '<div class="ritem"><div class="rmain"><div class="rname">Delete "'+esc(r.name)+'"?</div>'+
+        '<div class="rmeta">This cannot be undone.</div></div>'+
+        '<div class="racts"><button class="sbtn warn" data-h="delRepYes" data-k="'+r.key+'">Yes, delete</button>'+
+        '<button class="sbtn" data-h="delRepNo">Keep it</button></div></div>';
+    return '<div class="ritem"><div class="rmain">'+
+      '<div><span class="rname" contenteditable="true" data-rn="'+r.key+'" data-ph="Name this report">'+
+        esc(r.name||"")+'</span>'+
+        (r.published?'<span class="pill on">published</span>':'<span class="pill">draft</span>')+'</div>'+
+      '<div class="rmeta">'+esc(countOf(r.doc))+' · '+esc(whenTxt(r.updated))+'</div></div>'+
+      '<div class="racts">'+
+        '<button class="sbtn" data-h="open" data-k="'+r.key+'">Edit</button>'+
+        '<button class="sbtn" data-h="dupRep" data-k="'+r.key+'">Duplicate</button>'+
+        '<button class="sbtn" data-h="exportRep" data-k="'+r.key+'">Export</button>'+
+        '<button class="sbtn warn" data-h="delRep" data-k="'+r.key+'">Delete</button>'+
+      '</div></div>';
+  }).join("");
+}
+
+/* ---------------- home · card 2: system settings ---------------- */
+const ENGINES=[["mysql","MySQL / MariaDB"],["postgres","PostgreSQL"],["mssql","SQL Server"],["oracle","Oracle"]];
+const DEFPORT={mysql:"3306",postgres:"5432",mssql:"1433",oracle:"1521"};
+const newConn=()=>({id:uid("con"),name:"New connection",engine:"mysql",host:"localhost",
+  port:"3306",database:"",username:"",password:"",ssl:false,readOnly:true,status:"untested",note:""});
+
+function connFormHTML(c){
+  const P="conn:"+c.id+":";
+  return '<div class="conn-body">'+
+    '<div class="row">'+
+      fld("Name",txt(P+"name",c.name,"Reporting warehouse"))+
+      fld("Engine",ddl(P+"engine",c.engine,ENGINES))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Host",txt(P+"host",c.host,"db.internal"))+
+      fld("Port",txt(P+"port",c.port,"3306"))+
+      fld("Database",txt(P+"database",c.database,"nexd_reporting"))+
+    '</div>'+
+    '<div class="row">'+
+      fld("Username",txt(P+"username",c.username,"nexd_reader"))+
+      fld("Password",'<input type="password" data-set="'+P+'password" value="'+esc(c.password)+
+        '" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">')+
+    '</div>'+
+    '<div class="toggles">'+chk(P+"ssl",c.ssl,"Require SSL")+
+      chk(P+"readOnly",c.readOnly,"Read-only account")+'</div>'+
+    (c.note?'<div class="hint" style="margin-bottom:9px"><b style="color:'+
+      (c.status==="ok"?"var(--oxide)":"var(--iron)")+'">'+esc(c.note)+'</b></div>':'')+
+    '<div class="hint" style="margin-bottom:10px">'+
+      'A browser cannot open a database socket, so the details are checked here but not dialled. '+
+      'Saving posts them to <span class="mono">/api/connections</span>; '+
+      '<span class="mono">/api/connections/'+esc(c.id)+'/test</span> does the real handshake, and the '+
+      'password is Fernet-encrypted before it is stored.'+
+    '</div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+      '<button class="sbtn" data-h="testConn" data-c="'+c.id+'">Check details</button>'+
+      '<button class="sbtn warn" data-h="delConn" data-c="'+c.id+'">Delete connection</button>'+
+    '</div>'+
+  '</div>';
+}
+function connListHTML(){
+  if(!W.connections.length)
+    return '<div class="nothing">No database connected.<br><br>'+
+           '<button class="prim ghost" data-h="addconn">+ Add a connection</button></div>';
+  return W.connections.map(c=>{
+    if(W.pendingDelConn===c.id)
+      return '<div class="conn"><div class="conn-top"><div class="conn-nm">Delete "'+esc(c.name)+'"?</div>'+
+        '<button class="sbtn warn" data-h="delConnYes" data-c="'+c.id+'">Yes, delete</button>'+
+        '<button class="sbtn" data-h="delConnNo">Keep it</button></div></div>';
+    const open=W.openConn===c.id;
+    return '<div class="conn">'+
+      '<div class="conn-top" data-h="toggleConn" data-c="'+c.id+'">'+
+        '<span class="dot '+(c.status==="ok"?"ok":c.status==="bad"?"bad":"warn")+'"></span>'+
+        '<span class="conn-nm">'+esc(c.name)+'</span>'+
+        '<span class="conn-sub">'+esc(c.engine)+' · '+esc(c.host||"—")+':'+esc(c.port||"—")+
+          '/'+esc(c.database||"—")+'</span>'+
+        '<span class="sbtn">'+(open?"Close":"Edit")+'</span>'+
+      '</div>'+(open?connFormHTML(c):"")+'</div>';
+  }).join("");
+}
+function defaultsHTML(){
+  const d=W.defaults;
+  return '<div class="defs">'+
+    '<div class="grp" style="margin-top:0;padding-top:0;border:none">Defaults for every report</div>'+
+    '<div class="row" style="margin-bottom:0">'+
+      fld("Numbers",ddl("defaults::numberFormat",d.numberFormat,
+        [["en-IN","Indian — 12,34,567"],["en-US","International — 1,234,567"]]))+
+      fld("Row cap",txt("defaults::maxRows",d.maxRows,"5000","number"))+
+      fld("Query timeout (ms)",txt("defaults::timeoutMs",d.timeoutMs,"15000","number"))+
+    '</div>'+
+    '<div class="hint">Sent as MAX_ROWS and MAX_EXECUTION_TIME when the middleware runs a report.</div></div>';
+}
+function workspaceHTML(){
+  return '<div class="defs"><div class="grp" style="margin-top:0;padding-top:0;border:none">'+
+    'Workspace</div><div style="display:flex;gap:7px;flex-wrap:wrap">'+
+    '<button class="sbtn" data-h="importRep">Import a definition</button>'+
+    '<button class="sbtn" data-h="exportAll">Export everything</button></div>'+
+    '<div class="hint">Backup and restore. Definitions are plain JSON.</div></div>';
+}
+function schemaHTML(){
+  let s='<div class="defs"><div class="grp" style="margin-top:0;padding-top:0;border:none">'+
+    'Tables &amp; columns</div>';
+  if(!SCHEMA.tables.length)
+    s+='<div class="hint" style="margin:0 0 9px">None declared. Add the tables you want to design '+
+       'against — once a connection is live, <span class="mono">GET /api/catalog</span> fills this in.</div>';
+  SCHEMA.tables.forEach((t,i)=>{
+    const open=W.openTable===t.id;
+    s+='<div class="tbl">'+
+      '<div class="tbl-top" data-h="toggleTable" data-t="'+t.id+'">'+
+        '<span class="conn-nm">'+esc(t.name||"unnamed")+'</span>'+
+        '<span class="conn-sub">'+t.columns.length+' column'+(t.columns.length===1?"":"s")+'</span>'+
+        '<span class="sbtn">'+(open?"Close":"Edit")+'</span></div>';
+    if(open)s+='<div class="tbl-body">'+
+      '<div class="row">'+fld("Table name",txt("table:"+t.id+":name",t.name,"vendors"))+'</div>'+
+      fld("Columns — one per line, <span class=\'mono\'>name type</span>",
+        '<textarea data-set="table:'+t.id+':cols" placeholder="vendor_id number&#10;vendor_name text&#10;created_on date">'+
+        esc(colsText(t.columns))+'</textarea>')+
+      '<div class="hint" style="margin-bottom:9px">Types: text, number, date, bool.</div>'+
+      '<button class="sbtn warn" data-h="delTable" data-t="'+t.id+'">Delete table</button></div>';
+    s+='</div>';
+  });
+  return s+'<button class="prim ghost" data-h="addTable" style="margin-top:9px">+ Add table</button></div>';
+}
+function drawHome(){
+  document.getElementById("repList").innerHTML=repListHTML();
+  document.getElementById("connList").innerHTML=connListHTML();
+  document.getElementById("schema").innerHTML=schemaHTML();
+  document.getElementById("defaults").innerHTML=defaultsHTML();
+  document.getElementById("workspace").innerHTML=workspaceHTML();
+}
+
+/* ---------------- editor ---------------- */
+const pubBar=document.getElementById("pubBar");
+let dirty=false;
+function paintSaveState(){
+  const el=document.getElementById("saveState");
+  if(el)el.textContent=saveMsg;
+}
+function markDirty(){
+  if(screen!=="editor")return;
+  dirty=true;saveMsg="unsaved changes";paintSaveState();
+}
+function markClean(){
+  dirty=false;saveMsg="saved "+whenTxt(current&&current.updated);paintSaveState();
+}
+
+function openReport(rec){
+  current=rec;
+  doc=migrate(JSON.parse(JSON.stringify(rec.doc)));
+  doc.name=rec.name;
+  doc.numberFormat=doc.numberFormat||W.defaults.numberFormat;
+  sel=null;cfgOpen=false;pendingDel=null;
+  show("editor");
+  setMode("design");
+  drawPub();markClean();
+}
+function saveReport(quiet){
+  if(!current)return;
+  current.name=(doc.name||"").trim()||"New Report / Dashboard";
+  doc.name=current.name;
+  current.doc=JSON.parse(JSON.stringify(doc));
+  current.updated=Date.now();
+  if(!W.reports.find(r=>r.key===current.key))W.reports.unshift(current);
+  saveW();markClean();
+  if(!quiet)toast("Saved.");
+}
+function drawPub(){
+  if(current&&current.published){
+    pubBar.hidden=false;
+    pubBar.innerHTML='<b>Live.</b><code>/api/r/'+esc(current.key)+'-'+esc(current.published.token)+'</code>'+
+      '<button class="sbtn" data-h="copyLink">Copy link</button>'+
+      '<span class="conn-sub">published '+esc(whenTxt(current.published.at))+
+      ' · pinned to the version saved then</span>';
+  }else{
+    pubBar.hidden=true;pubBar.innerHTML="";
+  }
+  drawPagebar();
+}
+function setMode(m){
+  mode=m;
+  document.body.classList.toggle("design",m==="design");
+  document.body.classList.toggle("preview",m==="preview");
+  if(m==="preview"){sel=null;cfgOpen=false;pendingDel=null;}
+  drawPagebar();
+  draw();
+}
+
+/* any canvas edit marks the report dirty */
+canvas.addEventListener("input",markDirty);
+canvas.addEventListener("change",markDirty);
+canvas.addEventListener("click",e=>{if(e.target.closest("[data-act]"))markDirty();});
+
+/* ---------------- files ---------------- */
+const fileIn=document.getElementById("fileIn");
+let importMode="report";
+function download(name,obj){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));
+  a.download=name;a.click();URL.revokeObjectURL(a.href);
+}
+fileIn.onchange=()=>{
+  const f=fileIn.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const v=JSON.parse(r.result);
+      if(v.reports){
+        W.reports=(v.reports||[]).map(x=>Object.assign({},x,{doc:migrate(x.doc)}));
+        W.connections=v.connections||W.connections;
+        W.defaults=Object.assign(W.defaults,v.defaults||{});
+        if(v.schema){SCHEMA=v.schema;syncTables();}
+        saveW();drawHome();toast("Workspace loaded.");
+      }else if(v.sections){
+        W.reports.unshift({key:newKey(),name:v.name||f.name.replace(/\.json$/,""),
+          updated:Date.now(),published:null,doc:migrate(v)});
+        saveW();drawHome();toast("Report imported.");
+      }else throw new Error("not a NexD file");
+    }catch(err){toast("Could not read that file — "+err.message);}
+  };
+  r.readAsText(f);fileIn.value="";
+};
+
+/* ---------------- shell actions ---------------- */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-h]");
+  if(!el)return;
+  const k=el.dataset.k, c=el.dataset.c;
+  const rec=k?W.reports.find(r=>r.key===k):null;
+  const con=c?W.connections.find(x=>x.id===c):null;
+  switch(el.dataset.h){
+    case "design":       setMode("design");break;
+    case "preview":      setMode("preview");break;
+    case "viewReports":  if(screen==="editor")leaveEditor("reports"); else show("reports"); break;
+    case "viewSettings": if(screen==="editor")leaveEditor("settings"); else show("settings"); break;
+    case "closeEditor":  leaveEditor("reports"); break;
+    case "new":{
+      const s0=newSection();s0.name="Section one";
+      const d=blankDoc();d.numberFormat=W.defaults.numberFormat;d.sections=[s0];
+      openReport({key:newKey(),name:"New Report / Dashboard",updated:null,published:null,doc:d});
+      saveReport(true);
+      sel={kind:"doc",id:"doc"};pendingFocus="doc::name";draw();afterRender();break;
+    }
+    case "open": if(rec)openReport(rec);break;
+    case "dupRep":{
+      if(!rec)break;
+      W.reports.unshift({key:newKey(),name:rec.name+" (copy)",updated:Date.now(),
+        published:null,doc:JSON.parse(JSON.stringify(rec.doc))});
+      saveW();drawHome();break;
+    }
+    case "exportRep":
+      if(rec)download((rec.name||"report").replace(/[^\w\-]+/g,"-").toLowerCase()+".nexd.json",rec.doc);
+      break;
+    case "delRep":    W.pendingDelRep=k;drawHome();break;
+    case "delRepNo":  W.pendingDelRep=null;drawHome();break;
+    case "delRepYes":
+      W.reports=W.reports.filter(r=>r.key!==k);W.pendingDelRep=null;
+      saveW();drawHome();toast("Report deleted.");break;
+    case "importRep": importMode="report";fileIn.click();break;
+    case "exportAll": download("nexd-workspace.json",
+      {reports:W.reports,connections:W.connections,defaults:W.defaults,schema:SCHEMA});break;
+
+    case "addTable":{
+      const t={id:uid("tbl"),name:"",columns:[]};
+      SCHEMA.tables.push(t);W.openTable=t.id;syncTables();saveW();drawHome();break;
+    }
+    case "toggleTable": W.openTable=W.openTable===el.dataset.t?null:el.dataset.t;drawHome();break;
+    case "delTable":
+      SCHEMA.tables=SCHEMA.tables.filter(x=>x.id!==el.dataset.t);
+      W.openTable=null;syncTables();saveW();drawHome();break;
+
+    case "addconn":{
+      const n=newConn();W.connections.push(n);W.openConn=n.id;saveW();drawHome();break;
+    }
+    case "toggleConn": W.openConn=W.openConn===c?null:c;drawHome();break;
+    case "testConn":{
+      if(!con)break;
+      const miss=["host","port","database","username"].filter(f=>!String(con[f]||"").trim());
+      if(miss.length){con.status="bad";con.note="Still needed: "+miss.join(", ")+".";}
+      else if(!con.password){con.status="bad";con.note="No password set.";}
+      else{con.status="ok";con.note="Details look complete. The real handshake happens server-side.";}
+      saveW();drawHome();break;
+    }
+    case "delConn":    W.pendingDelConn=c;drawHome();break;
+    case "delConnNo":  W.pendingDelConn=null;drawHome();break;
+    case "delConnYes":
+      W.connections=W.connections.filter(x=>x.id!==c);
+      W.pendingDelConn=null;W.openConn=null;saveW();drawHome();toast("Connection deleted.");break;
+
+    case "save": saveReport();break;
+    case "publish":{
+      if(!current)break;
+      if(current.published){current.published=null;toast("Unpublished.");}
+      else{saveReport(true);current.published={token:newToken(),at:Date.now()};toast("Published.");}
+      saveW();drawPub();break;
+    }
+    case "copyLink":{
+      const t="/api/r/"+current.key+"-"+current.published.token;
+      if(navigator.clipboard&&navigator.clipboard.writeText)
+        navigator.clipboard.writeText(t).then(()=>toast("Link copied."),()=>toast(t));
+      else toast(t);
+      break;
+    }
+  }
+});
+
+/* renaming straight in the list */
+document.addEventListener("input",e=>{
+  const el=e.target.closest&&e.target.closest("[data-rn]");
+  if(!el)return;
+  const r=W.reports.find(x=>x.key===el.dataset.rn);
+  if(!r)return;
+  r.name=el.textContent;
+  if(current&&current.key===r.key)doc.name=r.name;
+});
+document.addEventListener("blur",e=>{
+  const el=e.target.closest&&e.target.closest("[data-rn]");
+  if(!el)return;
+  const r=W.reports.find(x=>x.key===el.dataset.rn);
+  if(r&&!String(r.name).trim()){r.name="New Report / Dashboard";drawHome();}
+  saveW();
+},true);
+document.addEventListener("keydown",e=>{
+  const el=e.target.closest&&e.target.closest("[data-rn]");
+  if(el&&e.key==="Enter"){e.preventDefault();el.blur();}
+});
+
+/* settings + connection form writes (canvas has its own handler) */
+document.addEventListener("change",e=>{
+  const t=e.target, path=t.dataset.set;
+  if(!path||(t.closest&&t.closest("#canvas")))return;
+  const a=path.indexOf(":"), b=path.indexOf(":",a+1);
+  if(a<0||b<0)return;
+  const kind=path.slice(0,a), id=path.slice(a+1,b), field=path.slice(b+1);
+  const raw=t.type==="checkbox"?t.checked:t.value;
+  if(kind==="table"){
+    const t=SCHEMA.tables.find(x=>x.id===id);
+    if(!t)return;
+    if(field==="cols")t.columns=parseCols(raw);
+    else t[field]=String(raw).trim();
+    syncTables();saveW();drawHome();
+    return;
+  }
+  if(kind==="conn"){
+    const c=W.connections.find(x=>x.id===id);
+    if(!c)return;
+    c[field]=raw;
+    if(field==="engine")c.port=DEFPORT[raw]||c.port;
+    c.status="untested";c.note="";
+    saveW();drawHome();
+  }else if(kind==="defaults"){
+    W.defaults[field]=(field==="numberFormat")?raw:(Number(raw)||W.defaults[field]);
+    if(field==="numberFormat"&&doc)doc.numberFormat=raw;
+    saveW();drawHome();
+  }
+});
+
+const helpX=document.getElementById("helpX");
+if(helpX)helpX.onclick=()=>{const h=document.getElementById("help");if(h)h.remove();};
+
+/* ------------------------------ go ------------------------------ */
+(async function boot(){
+  await loadW();
+  syncTables();
+  show("reports");
+})();
+</script>
+</body>
+</html>
