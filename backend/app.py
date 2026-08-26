@@ -325,7 +325,11 @@ def execute_all(key):
     for sec in definition.get("sections", []):
         for box in sec.get("boxes", []):
             ordered.append(box)
-    ordered.sort(key=lambda b: 0 if b.get("kind") == "value" else 1)
+        def _order_key(b):
+            if b.get("kind") == "value":
+                return 0 if (b.get("value") or {}).get("source") != "formula" else 1
+            return 2
+    ordered.sort(key=_order_key)
 
     for box in ordered:
         try:
@@ -345,6 +349,7 @@ def execute_all(key):
                 v = None
             if v is not None:
                 values[str(box.get("title", "")).strip().lower()] = v
+            
     return jsonify(results=results)
 
 
