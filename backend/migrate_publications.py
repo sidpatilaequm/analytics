@@ -18,7 +18,7 @@ cursor.execute("""
     SELECT COUNT(*)
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'publications'
+      AND TABLE_NAME = 'process_publications'
       AND COLUMN_NAME = 'role'
 """)
 
@@ -28,8 +28,8 @@ if exists:
     print("Migration skipped: 'role' column already exists.")
 else:
     cursor.execute("""
-        ALTER TABLE publications
-        ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT '' AFTER token
+        ALTER TABLE process_publications
+        ADD COLUMN role VARCHAR(32) NOT NULL DEFAULT ''
     """)
     conn.commit()
     print("Migration successful: 'role' column added.")
