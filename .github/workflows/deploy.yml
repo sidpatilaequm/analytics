@@ -7,6 +7,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy over SSH
         env:
@@ -16,13 +17,15 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ubuntu@$SERVER_HOST '
             cd ~/aqqum/analytics &&
-            git pull origin main &&
+            git fetch origin main &&
+            git reset --hard origin/main &&
             cd backend &&
             source .venv/bin/activate &&
-            python migrate_publications.py &&
             pip install -r requirements.txt &&
+            python migrate_publications.py &&
             deactivate &&
             cd ../frontend &&
             npm install &&
