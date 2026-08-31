@@ -9,6 +9,7 @@ import { StoreProvider, useStore } from "./store.jsx";
 import { blankDoc, migrate } from "./model.js";
 import Canvas from "./components/Canvas.jsx";
 import { Reports, Settings } from "./components/Views.jsx";
+import PublicReport from "./components/PublicReport.jsx";
 
 /* Single sign-on from the admin portal: embedded in an iframe, the portal
    mints a short-lived token server-side (it holds the real login, never
@@ -26,7 +27,33 @@ function consumeSsoToken() {
   window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
 }
 
+/* Local drafts: a safety net for an accidental refresh or closed tab, not a
+   replacement for Save. Keyed per-report, cleared the moment a real Save
+   succeeds, so it never lingers and never substitutes for the server copy. */
+const DRAFT_PREFIX = "nexd:draft:";
+function readDraft(key) {
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function writeDraft(key, doc) {
+  try { localStorage.setItem(DRAFT_PREFIX + key, JSON.stringify({ doc, savedAt: Date.now() })); }
+  catch { /* storage full or disabled — autosave just quietly stops */ }
+}
+function clearDraft(key) {
+  try { localStorage.removeItem(DRAFT_PREFIX + key); } catch { /* nothing to clear */ }
+}
+
 export default function App() {
+  const path = window.location.pathname;
+
+  const [signedIn, setSignedIn] = React.useState(false);
+
+  if (path.startsWith("/r/")) {
+    return <PublicReport />;
+  }
+
   return (
     <StoreProvider>
       <Shell />
@@ -41,6 +68,28 @@ function Shell() {
     return hasToken();
   });
   const [saveMsg, setSaveMsg] = React.useState("");
+    const [pubRole, setPubRole] = React.useState("vendor");
+  const [exporting, setExporting] = React.useState(null);
+  const [recoverable, setRecoverable] = React.useState(null); // {doc, savedAt}
+
+  React.useEffect(() => {
+    if (state.published?.links?.length) setPubRole(state.published.links[0].role);
+  }, [state.published]);
+
+  /* Autosave a draft locally whenever there are unsaved changes. */
+  React.useEffect(() => {
+    if (!state.processKey || !state.dirty) return undefined;
+    const t = setTimeout(() => writeDraft(state.processKey, state.doc), 600);
+    return () => clearTimeout(t);
+  }, [state.processKey, state.dirty, JSON.stringify(state.doc)]);
+
+  /* Whenever a report is opened, check whether a local draft for it exists
+     and differs from what the server just gave us — offer to bring it back. */
+  React.useEffect(() => {
+    if (!state.processKey) { setRecoverable(null); return; }
+    const d = readDraft(state.processKey);
+    setRecoverable(d && JSON.stringify(d.doc) !== JSON.stringify(state.doc) ? d : null);
+  }, [state.processKey]);
 
   React.useEffect(() => {
     document.body.className = state.mode === "preview" ? "preview" : "design";
@@ -132,6 +181,27 @@ function Shell() {
 
   const editing = state.view === "editor";
 
+  const exportAs = async (fmt) => {
+    if (!state.processKey) return;
+    setExporting(fmt);
+    try {
+      const safe = (state.doc.name || "report").replace(/[^\w-]+/g, "-").toLowerCase();
+      await api.exportReport(state.processKey, fmt, state.filterState, `${safe}.${fmt}`);
+    } catch (e) {
+      dispatch({ type: "error", error: e.message });
+    } finally {
+      setExporting(null);
+    }
+  };
+    const restoreDraft = () => {
+    dispatch({ type: "loadDraft", doc: recoverable.doc });
+    setRecoverable(null);
+  };
+  const discardDraft = () => {
+    clearDraft(state.processKey);
+    setRecoverable(null);
+  };
+
   return (
     <div className="pane">
       <div className="wordmark"><b>NEXD</b><span>v14</span></div>
@@ -147,9 +217,20 @@ function Shell() {
             <button className="pb" aria-pressed={state.mode === "preview"}
               onClick={() => dispatch({ type: "mode", mode: "preview" })}>Preview</button>
             <button className="pb" onClick={save}>Save</button>
-            <button className={`pb ${state.published ? "live" : "go"}`} onClick={publish}>
-              {state.published ? "Unpublish" : "Publish"}
-            </button>
+          <span className="pbsep" />
+          <button className="pb" disabled={exporting === "pdf"} onClick={() => exportAs("pdf")}>
+            {exporting === "pdf" ? "Preparing…" : "Download PDF"}
+          </button>
+          <button className="pb" disabled={exporting === "pptx"} onClick={() => exportAs("pptx")}>
+            {exporting === "pptx" ? "Preparing…" : "PPT"}
+          </button>
+          <button className="pb" disabled={exporting === "xlsx"} onClick={() => exportAs("xlsx")}>
+            {exporting === "xlsx" ? "Preparing…" : "Excel"}
+          </button>
+          <span className="pbsep" />
+          <button className={`pb ${state.published ? "live" : "go"}`} onClick={publish}>
+            {state.published ? "Unpublish" : "Publish"}
+          </button>
             <button className="pb" onClick={() => leave("reports")}>Close</button>
           </>
         ) : (
@@ -165,17 +246,28 @@ function Shell() {
         <span className="sstate">{state.busy ? "running…" : saveMsg}</span>
       </div>
 
-      {state.published && editing && (
-        <div className="pubbar">
-          <b>Live.</b>
-          <code>{state.published.url}</code>
-          <button className="sbtn" onClick={() =>
-            navigator.clipboard?.writeText(state.published.url)}>Copy link</button>
-          <span className="conn-sub">
-            pinned to version {state.published.pinned_version}
-          </span>
-        </div>
-      )}
+                  {state.published && editing && (() => {
+        const links = state.published.links || [];
+        const current = links.find((l) => l.role === pubRole) || links[0];
+        return (
+          <div className="pubbar pubbar-multi">
+            <b>Live — pinned to version {state.published.pinned_version}.</b>
+            {current && (
+              <div className="publink">
+                <select value={pubRole} onChange={(e) => setPubRole(e.target.value)}>
+                  {links.map((l) => (
+                    <option key={l.role} value={l.role}>{l.role}</option>
+                  ))}
+                </select>
+                <code>{window.location.origin + current.url}</code>
+                <a className="prim" href={current.url} target="_blank" rel="noopener noreferrer">
+                  Open
+                </a>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {state.error && <div className="fx bad" style={{ marginBottom: 14 }}>{state.error}</div>}
 

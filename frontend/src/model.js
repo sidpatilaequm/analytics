@@ -35,7 +35,9 @@ export const FWIDTHS = [["narrow", "S"], ["auto", "M"], ["wide", "L"], ["full", 
 export const FMTS = [["auto", "Auto"], ["text", "Text"], ["number", "Number"],
   ["currency", "Currency"], ["percent", "Percent"], ["date", "Date"]];
 export const BSTYLES = [["solid", "Solid"], ["dashed", "Dashed"], ["dotted", "Dotted"], ["double", "Double"]];
-export const BOX_KINDS = [["value", "Value"], ["chart", "Graph"], ["table", "Table"], ["note", "Note"]];
+export const BOX_KINDS = [["value", "Value"], ["chart", "Graph"], ["table", "Table"],
+  ["note", "Note"], ["form", "Form"]];
+export const PUBLIC_ROLES = [["vendor", "Vendor"], ["admin", "Admin"], ["employee", "Employee"]];
 
 export const S = (o = {}) => ({
   font: "", size: null, color: "", bg: "", align: "", caps: "",
@@ -62,7 +64,7 @@ export const newFilter = (table = "") => ({
   optionSource: "list", optTable: "", optColumn: "", list: "", value: "",
   visible: true, labelPos: "left", colon: true, width: "auto",
   labelWidth: "", ctrlWidth: "", gap: 8, placeholder: "",
-  style: S(), ctrlStyle: S(),
+  style: S(), ctrlStyle: S(), roles: [],
 });
 
 export const newSection = () => ({
@@ -94,7 +96,7 @@ export function ensureConfigs(b) {
 export const newBox = (base = "") => ensureConfigs({
   id: uid("box"), kind: "value", title: "", span: 1,
   style: S(), titleStyle: S(), frame: F(),
-  useFilters: true, visible: true, titleVisible: true, src: newSrc(base),
+  useFilters: true, visible: true, titleVisible: true, src: newSrc(base), roles: [],
 });
 
 /* ---------------- layout helpers ---------------- */
@@ -162,6 +164,7 @@ export function migrate(d) {
     f.labelWidth = f.labelWidth || "";
     f.ctrlWidth = f.ctrlWidth || "";
     f.placeholder = f.placeholder || "";
+    if (!Array.isArray(f.roles)) f.roles = [];
   });
   (doc.sections || []).forEach((sc) => {
     sc.style = normS(sc.style);
@@ -176,6 +179,7 @@ export function migrate(d) {
       b.titleStyle = normS(b.titleStyle);
       b.frame = normF(b.frame);
       if (b.visible === undefined) b.visible = true;
+      if (!Array.isArray(b.roles)) b.roles = [];
       ensureConfigs(b);
       if (b.table) b.table.headStyle = normS(b.table.headStyle);
       if (b.value && b.value.formula === undefined) b.value.formula = "";

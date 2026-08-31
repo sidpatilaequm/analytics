@@ -6,7 +6,7 @@ import api from "../api.js";
 import { useStore } from "../store.jsx";
 import {
   AGGS, ALIGNS, BCOLORS, BGSWATCH, BSTYLES, CASES, FONTS, JOIN_TYPES, OPS,
-  SIZES, SWATCH, colOptions, colsOf, normF, normS,
+  PUBLIC_ROLES, SIZES, SWATCH, colOptions, colsOf, normF, normS,
 } from "../model.js";
 
 /* ---------------- primitives ---------------- */
@@ -105,6 +105,19 @@ export const SegBar = ({ value, options, onChange }) => (
     ))}
   </div>
 );
+
+export const RoleChips = ({ value, onChange }) => {
+  const roles = value || [];
+  const toggle = (r) => onChange(
+    roles.includes(r) ? roles.filter((x) => x !== r) : [...roles, r]);
+  return (
+    <div className="chips">
+      {PUBLIC_ROLES.map(([v, l]) => (
+        <button key={v} aria-pressed={roles.includes(v)} onClick={() => toggle(v)}>{l}</button>
+      ))}
+    </div>
+  );
+};
 
 export const Swatches = ({ value, list, onChange }) => (
   <div className="swatches">

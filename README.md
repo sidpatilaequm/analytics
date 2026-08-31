@@ -121,6 +121,18 @@ Sign in, open **System Settings**, add a connection to your reporting
 database and press **Test connection**. The catalogue fills from
 `INFORMATION_SCHEMA` and every table and column picker comes alive.
 
+## Export & Document Generation
+
+The application supports generating and exporting reports in multiple formats:
+
+- **PDF** — powered by `ReportLab`
+- **PowerPoint (.pptx)** — powered by `python-pptx`
+- **Excel (.xlsx)** — powered by `openpyxl`
+
+### Dependencies
+
+```bash
+pip install reportlab python-pptx openpyxl
 ---
 
 ## API

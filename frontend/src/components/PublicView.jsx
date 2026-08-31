@@ -1,0 +1,88 @@
+/* PublicView.jsx — what a published link actually opens.
+
+   No login, no editor chrome. It fetches the definition for this one link
+   (already trimmed server-side to whatever role this link belongs to),
+   drops it into the same store/Canvas the editor's Preview tab uses, and
+   re-runs the boxes whenever a filter changes — against the public,
+   role-scoped execute endpoint, never the authenticated one. */
+
+import React from "react";
+import api from "../api.js";
+import { StoreProvider, useStore } from "../store.jsx";
+import Canvas from "./Canvas.jsx";
+
+export default function PublicView({ slug }) {
+  return (
+    <StoreProvider>
+      <PublicShell slug={slug} />
+    </StoreProvider>
+  );
+}
+
+function PublicShell({ slug }) {
+  const { state, dispatch } = useStore();
+  const [role, setRole] = React.useState(null);
+  const [loaded, setLoaded] = React.useState(false);
+  const [loadErr, setLoadErr] = React.useState(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await api.publicDefinition(slug);
+        if (!alive) return;
+        setRole(r.role);
+        dispatch({ type: "open", doc: r.definition, key: null, connectionId: null });
+        dispatch({ type: "mode", mode: "preview" });
+        setLoaded(true);
+      } catch (e) {
+        if (alive) setLoadErr(e.message || "this link is not live");
+      }
+    })();
+    return () => { alive = false; };
+  }, [slug]);
+
+  React.useEffect(() => {
+    if (!loaded) return undefined;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      dispatch({ type: "busy", busy: true });
+      try {
+        const r = await api.publicExecute(slug, state.filterState, ctrl.signal);
+        dispatch({ type: "results", results: r.results || {} });
+        dispatch({ type: "error", error: null });
+      } catch (e) {
+        if (e.name !== "AbortError") dispatch({ type: "error", error: e.message });
+      } finally {
+        dispatch({ type: "busy", busy: false });
+      }
+    }, 350);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [loaded, slug, JSON.stringify(state.doc), JSON.stringify(state.filterState)]);
+
+  if (loadErr) {
+    return (
+      <div className="pane" style={{ maxWidth: 480, paddingTop: 100, textAlign: "center" }}>
+        <div className="wordmark" style={{ justifyContent: "center" }}><b>NEXD</b></div>
+        <p style={{ color: "var(--muted)", marginTop: 18 }}>{loadErr}</p>
+      </div>
+    );
+  }
+  if (!loaded) {
+    return (
+      <div className="pane" style={{ paddingTop: 100, textAlign: "center", color: "var(--muted)" }}>
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="pane">
+      <div className="pubviewtag">
+        Shared {role ? `${role} ` : ""}view — read-only
+      </div>
+      {state.error && <div className="fx bad" style={{ marginBottom: 14 }}>{state.error}</div>}
+      <Canvas />
+    </div>
+  );
+}

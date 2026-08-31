@@ -6,15 +6,16 @@ CREATE DATABASE IF NOT EXISTS nexd_designer
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE nexd_designer;
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS publications (
   id            INT AUTO_INCREMENT PRIMARY KEY,
-  username      VARCHAR(64)  NOT NULL UNIQUE,
-  email         VARCHAR(190) NOT NULL UNIQUE,
-  full_name     VARCHAR(190) NOT NULL DEFAULT '',
-  password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('admin','designer','viewer') NOT NULL DEFAULT 'designer',
-  is_active     TINYINT(1)   NOT NULL DEFAULT 1,
-  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+  process_id    INT NOT NULL,
+  token         VARCHAR(64) NOT NULL UNIQUE,
+  role          VARCHAR(32) NOT NULL DEFAULT '',
+  pinned_version INT NOT NULL,
+  is_active     TINYINT(1) NOT NULL DEFAULT 1,
+  published_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pub_proc FOREIGN KEY (process_id)
+    REFERENCES processes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Where report data is read from. The password is Fernet-encrypted with

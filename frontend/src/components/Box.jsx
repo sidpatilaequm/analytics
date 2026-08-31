@@ -12,9 +12,8 @@ import {
 } from "../model.js";
 import {
   Check, Chips, ConfirmBar, DeleteButton, Field, FormatPanel, FrameControls,
-  Group, Hint, Row, SegBar, Select, SourceEditor, Switch, Text, TextArea, Toggles,
+  Group, Hint, Row, RoleChips, SegBar, Select, SourceEditor, Switch, Text, TextArea, Toggles,
 } from "./Panels.jsx";
-
 /* An editable line that writes on blur, so typing never re-renders the tree. */
 function Editable({ value, onChange, className, placeholder, style }) {
   const ref = React.useRef(null);
@@ -325,6 +324,9 @@ function Panel({ box, cols }) {
             <Switch on={box.titleVisible !== false} label="Show box heading"
               onChange={(v) => set("titleVisible", v)} />
           </div>
+          <Group>Who can see this box on a published link</Group>
+          <RoleChips value={box.roles} onChange={(v) => set("roles", v)} />
+          <Hint>Nothing picked = shown on every published link, whatever role opened it.</Hint>
           <Group>This box shows</Group>
           <SegBar value={box.kind} options={BOX_KINDS} onChange={(v) => set("kind", v)} />
           <Row style={{ marginTop: 10 }}>

@@ -10,7 +10,7 @@ import {
 } from "../model.js";
 import {
   Check, Chips, ConfirmBar, DeleteButton, Field, FormatPanel, FrameControls,
-  Group, Hint, Row, Select, Switch, Text, TextArea, Toggles,
+  Group, Hint, Row, RoleChips, Select, Switch, Text, TextArea, Toggles,
 } from "./Panels.jsx";
 
 function Editable({ value, onChange, className, placeholder, style }) {
@@ -397,6 +397,10 @@ function FilterPanel({ filter: f }) {
             </Field>
           </Row>
           <Hint>Applies to every box whose tables carry a column of this name.</Hint>
+
+          <Group>Who can see this filter on a published link</Group>
+          <RoleChips value={f.roles} onChange={(v) => set("roles", v)} />
+          <Hint>Nothing picked = shown on every published link, whatever role opened it.</Hint>
 
           {["select", "radio", "checkbox"].includes(f.control) && (
             <>

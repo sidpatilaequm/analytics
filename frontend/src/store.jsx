@@ -97,6 +97,7 @@ export function reducer(state, a) {
       return { ...state, view: "reports", processKey: null, doc: blankDoc(),
         dirty: false, sel: null, cfgOpen: false, results: {}, published: null };
     case "saved":      return { ...state, dirty: false, processKey: a.key || state.processKey };
+    case "loadDraft":  return { ...state, doc: a.doc, dirty: true };
     case "connection": return { ...state, connectionId: a.id, dirty: true };
 
     /* ---- selection ---- */

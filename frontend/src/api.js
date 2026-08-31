@@ -19,11 +19,54 @@ async function call(path, { method = "GET", body, signal } = {}) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  /* Downloads (PDF/PPTX/XLSX exports) aren't JSON, so they go through the
+   browser's normal fetch + blob + temporary-link dance instead of call(). */
+async function download(path, filename) {
+  const res = await fetch(BASE + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
   if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
   return data;
 }
+/* Downloads (PDF/PPTX/XLSX exports) aren't JSON, so they go through the
+   browser's normal fetch + blob + temporary-link dance instead of call(). */
+async function download(path, filename) {
+  const res = await fetch(BASE + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 
 const api = {
   login: (username, password) =>
@@ -59,6 +102,14 @@ const api = {
 
   publish: (key) => call(`/processes/${key}/publish`, { method: "POST" }),
   unpublish: (key) => call(`/processes/${key}/unpublish`, { method: "POST" }),
-};
+  
 
+    publicDefinition: (slug, signal) => call(`/r/${slug}`, { signal }),
+  publicExecute: (slug, filters, signal) =>
+    call(`/r/${slug}/execute`, { method: "POST", body: { filters }, signal }),
+
+  exportReport: (key, fmt, filters, filename) =>
+    download(`/processes/${key}/export/${fmt}?filters=${encodeURIComponent(JSON.stringify(filters || {}))}`,
+      filename),
+};
 export default api;

@@ -8,6 +8,7 @@ role-scoped link meaningful rather than decorative.
 
 import json
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -18,8 +19,10 @@ from flask_cors import CORS
 from werkzeug.security import check_password_hash
 
 import db
+import exporters
 import formula
 from querybuilder import BadDefinition, build, build_write, preview
+
 app = Flask(__name__)
 CORS(
     app,
@@ -201,6 +204,12 @@ def get_process(key):
     out = db.clean(row)
     out["definition"] = row["definition"] if isinstance(row["definition"], dict) \
         else json.loads(row["definition"])
+    pubs = db.qall("SELECT role, token, pinned_version FROM publications "
+                   "WHERE process_id=%s AND is_active=1", (row["id"],))
+    out["published"] = {
+        "pinned_version": pubs[0]["pinned_version"],
+        "links": [{"role": p["role"], "url": f"/r/{key}/{p['token']}"} for p in pubs],
+    } if pubs else None
     return jsonify(out)
 
 
@@ -299,6 +308,88 @@ def _run_box(box, definition, state, conn_row, cat, role_row, values):
     return {"rows": rows}
 
 
+def _execute_boxes(definition, state, conn_row, cat, allow_forms=True):
+    """Run every box in a definition and return {box_id: payload}. Shared by
+    the authenticated editor's execute-all and the public, role-scoped
+    viewer, so the two can never quietly drift apart from each other."""
+    results, values = {}, {}
+    ordered = [b for sec in definition.get("sections", []) for b in sec.get("boxes", [])]
+
+    # Plain value boxes first, then formulas (which may reference them by
+    # title), then everything else — charts/tables/notes/forms.
+    def _order_key(b):
+        if b.get("kind") == "value":
+            return 0 if (b.get("value") or {}).get("source") != "formula" else 1
+        return 2
+    ordered.sort(key=_order_key)
+
+    for box in ordered:
+        if not allow_forms and box.get("kind") == "form":
+            continue  # a public link never gets a box that can write data
+        try:
+            payload = _run_box(box, definition, state, conn_row, cat, None, values)
+        except BadDefinition as exc:
+            payload = {"error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": str(exc)[:300]}
+        if payload is None:
+            continue
+        results[box["id"]] = payload
+        if box.get("kind") == "value":
+            v = payload.get("value")
+            try:
+                v = float(v) if v is not None and v != "" else None
+            except (TypeError, ValueError):
+                v = None
+            if v is not None:
+                values[str(box.get("title", "")).strip().lower()] = v
+    return results
+
+
+def _render_boxes(definition, results):
+    """Merge each box's definition (title, kind, formatting) with its
+    computed result into one flat, format-agnostic shape — the shared input
+    for every export (PDF/PPTX/XLSX), so the three formats can't drift
+    apart from each other or from what the dashboard itself shows."""
+    out = []
+    for sec in definition.get("sections", []):
+        boxes = []
+        for box in sec.get("boxes", []):
+            if box.get("visible") is False or box.get("kind") == "form":
+                continue
+            payload = results.get(box["id"], {}) or {}
+            entry = {"title": box.get("title") or "", "kind": box.get("kind")}
+            if payload.get("error"):
+                entry["error"] = payload["error"]
+            elif box.get("kind") == "value":
+                v = payload.get("value")
+                vc = box.get("value") or {}
+                if isinstance(v, (int, float)):
+                    dec = int(vc.get("decimals") or 0)
+                    entry["text"] = f"{vc.get('prefix', '')}{v:,.{dec}f}{vc.get('suffix', '')}"
+                elif v not in (None, ""):
+                    entry["text"] = f"{vc.get('prefix', '')}{v}{vc.get('suffix', '')}"
+                else:
+                    entry["text"] = "—"
+                entry["note"] = vc.get("note", "")
+            elif box.get("kind") == "chart":
+                entry["rows"] = [["Category", "Value"]] + [
+                    [d.get("label"), d.get("value")] for d in (payload.get("data") or [])]
+            elif box.get("kind") == "table":
+                cols = [c for c in (box.get("table") or {}).get("columns", [])
+                        if c.get("on", True)]
+                headers = [c.get("label") or c.get("col") for c in cols]
+                entry["rows"] = [headers] + [
+                    [r.get(c["col"]) for c in cols] for r in (payload.get("rows") or [])]
+            elif box.get("kind") == "note":
+                entry["text"] = re.sub("<[^<]+?>", "", (box.get("note") or {}).get("html", ""))
+            boxes.append(entry)
+        if boxes:
+            out.append({"name": sec.get("name") or "", "desc": sec.get("desc") or "",
+                        "boxes": boxes})
+    return out
+
+
 @app.post("/api/processes/<key>/execute-all")
 @auth()
 def execute_all(key):
@@ -318,38 +409,7 @@ def execute_all(key):
         return jsonify(error=f"could not read the catalogue: {exc}"), 502
 
     state = body.get("filters") or {}
-    results, values = {}, {}
-
-    # Value boxes first, so a formula can reference another box by name.
-    ordered = []
-    for sec in definition.get("sections", []):
-        for box in sec.get("boxes", []):
-            ordered.append(box)
-        def _order_key(b):
-            if b.get("kind") == "value":
-                return 0 if (b.get("value") or {}).get("source") != "formula" else 1
-            return 2
-    ordered.sort(key=_order_key)
-
-    for box in ordered:
-        try:
-            payload = _run_box(box, definition, state, conn_row, cat, None, values)
-        except BadDefinition as exc:
-            payload = {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": str(exc)[:300]}
-        if payload is None:
-            continue
-        results[box["id"]] = payload
-        if box.get("kind") == "value":
-            v = payload.get("value")
-            try:
-                v = float(v) if v is not None and v != "" else None
-            except (TypeError, ValueError):
-                v = None
-            if v is not None:
-                values[str(box.get("title", "")).strip().lower()] = v
-            
+    results = _execute_boxes(definition, state, conn_row, cat, allow_forms=True)
     return jsonify(results=results)
 
 
@@ -402,7 +462,122 @@ def filter_options(key, client_id):
 @app.post("/api/processes/<key>/write")
 @auth()
 def write_box(key):
-    ...
+    """Insert or update a row from a form box. Requires the connection's DB
+    user to actually have write privileges — this is not a report query, so
+    it does not go through db.reporting()'s forced read-only transaction."""
+    row = db.q1("SELECT * FROM processes WHERE process_key=%s", (key,))
+    if not row:
+        return jsonify(error="no such report"), 404
+    conn_row = _connection_for(row)
+    if not conn_row:
+        return jsonify(error="no data connection configured"), 400
+
+    body = request.get_json(silent=True) or {}
+    kind = body.get("kind")
+    table = body.get("table")
+    values = body.get("values") or {}
+    key_column = body.get("key_column")
+    key_value = body.get("key_value")
+
+    try:
+        cat = _catalogue(conn_row)
+        sql, params = build_write(kind, table, key_column, key_value, values, cat)
+        affected = db.run_write_query(conn_row, sql, params)
+    except BadDefinition as exc:
+        return jsonify(error=str(exc)), 400
+    except Exception as exc:  # noqa: BLE001 - surfaced to the person editing
+        return jsonify(error=str(exc)[:300]), 502
+    return jsonify(ok=True, affected=affected)
+
+
+# --------------------------------------------------------------------------
+# exporting — PDF / PPTX / XLSX, all built from the same computed results
+# --------------------------------------------------------------------------
+EXPORT_KINDS = {
+    "pdf": ("application/pdf", exporters.build_pdf),
+    "pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",
+             exporters.build_pptx),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             exporters.build_xlsx),
+}
+
+
+@app.get("/api/processes/<key>/export/<fmt>")
+@auth()
+def export_report(key, fmt):
+    if fmt not in EXPORT_KINDS:
+        return jsonify(error="unknown export format"), 400
+    row = db.q1("SELECT * FROM processes WHERE process_key=%s", (key,))
+    if not row:
+        return jsonify(error="no such report"), 404
+    definition = row["definition"] if isinstance(row["definition"], dict) \
+        else json.loads(row["definition"])
+    conn_row = _connection_for(row)
+    if not conn_row:
+        return jsonify(error="no data connection configured"), 400
+    try:
+        cat = _catalogue(conn_row)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=f"could not read the catalogue: {exc}"), 502
+
+    try:
+        filters = json.loads(request.args.get("filters") or "{}")
+    except ValueError:
+        filters = {}
+    results = _execute_boxes(definition, filters, conn_row, cat, allow_forms=False)
+    sections = _render_boxes(definition, results)
+    name = definition.get("name") or "report"
+
+    mime, builder = EXPORT_KINDS[fmt]
+    data = builder(name, sections)
+    safe = re.sub(r"[^\w-]+", "-", name).strip("-").lower() or "report"
+
+    resp = app.response_class(data, mimetype=mime)
+    resp.headers["Content-Disposition"] = f'attachment; filename="{safe}.{fmt}"'
+    return resp
+
+
+# --------------------------------------------------------------------------
+# role-scoped visibility — which boxes/filters a published link may show
+# --------------------------------------------------------------------------
+PUBLIC_ROLES = ["vendor", "admin", "employee"]
+
+
+def _visible(node, role):
+    """A box or filter is visible to a role unless it names a roles list of
+    its own that this role isn't in. No list set at all = visible to everyone."""
+    roles = node.get("roles") or []
+    return not roles or role in roles
+
+
+def _definition_for_role(definition, role):
+    """Trim a definition down to what one role may see, on the server, before
+    it ever reaches a browser — so a public viewer can't retrieve a box's
+    data by editing the page, because that box was never sent to it."""
+    out = dict(definition)
+    out["filters"] = [f for f in definition.get("filters", []) if _visible(f, role)]
+    out["sections"] = []
+    for sec in definition.get("sections", []):
+        boxes = [b for b in sec.get("boxes", []) if _visible(b, role)]
+        if boxes:
+            out["sections"].append({**sec, "boxes": boxes})
+    return out
+
+
+def _resolve_pub(key, token):
+    """One published link -> its row (and therefore its role, and the report
+    it belongs to). Looked up by two separate URL segments — key and token
+    are never glued into one string, so a token that happens to contain a
+    hyphen or slash of its own can never corrupt the lookup."""
+    return db.q1(
+        "SELECT pub.*, p.process_key, p.connection_id "
+        "FROM publications pub JOIN processes p ON p.id = pub.process_id "
+        "WHERE p.process_key=%s AND pub.token=%s AND pub.is_active=1", (key, token))
+
+
+# --------------------------------------------------------------------------
+# publishing
+# --------------------------------------------------------------------------
 @app.post("/api/processes/<key>/publish")
 @auth()
 def publish(key):
@@ -410,10 +585,13 @@ def publish(key):
     if not row:
         return jsonify(error="no such report"), 404
     db.execute("UPDATE publications SET is_active=0 WHERE process_id=%s", (row["id"],))
-    token = secrets.token_urlsafe(16)
-    db.execute("INSERT INTO publications (process_id,token,pinned_version) "
-               "VALUES (%s,%s,%s)", (row["id"], token, row["version"]))
-    return jsonify(token=token, url=f"/api/r/{key}-{token}", pinned_version=row["version"])
+    links = []
+    for role in PUBLIC_ROLES:
+        token = secrets.token_urlsafe(16)
+        db.execute("INSERT INTO publications (process_id,token,role,pinned_version) "
+                   "VALUES (%s,%s,%s,%s)", (row["id"], token, role, row["version"]))
+        links.append({"role": role, "url": f"/r/{key}/{token}"})
+    return jsonify(links=links, pinned_version=row["version"])
 
 
 @app.post("/api/processes/<key>/unpublish")
@@ -425,36 +603,52 @@ def unpublish(key):
     return jsonify(ok=True)
 
 
-@app.get("/api/r/<path:slug>")
-def resolve_public(slug):
-    """What a published link resolves to.
-
-    NOT FINISHED FOR PRODUCTION. This endpoint accepts ?role= from the query
-    string. That is a *request*, not proof. Before trusting it, verify the
-    caller is entitled to that role from a session or a signed assertion —
-    otherwise anyone can type ?role=cfo. The role lock inside
-    filter_conditions() stops someone widening their scope *within* a role;
-    it cannot stop them claiming a different one. That check belongs here.
-    """
-    if "-" not in slug:
-        return jsonify(error="bad link"), 404
-    key, token = slug.rsplit("-", 1)
-    pub = db.q1(
-        "SELECT pub.*, p.process_key FROM publications pub "
-        "JOIN processes p ON p.id = pub.process_id "
-        "WHERE p.process_key=%s AND pub.token=%s AND pub.is_active=1", (key, token))
+@app.get("/api/r/<key>/<token>")
+def resolve_public(key, token):
+    """What a published link resolves to: the report's definition, trimmed
+    to whatever this link's own role may see."""
+    pub = _resolve_pub(key, token)
     if not pub:
         return jsonify(error="this link is not live"), 404
     db.execute("INSERT INTO publication_access (publication_id,remote_addr,role_claimed) "
-               "VALUES (%s,%s,%s)",
-               (pub["id"], request.remote_addr or "", request.args.get("role", "")))
+               "VALUES (%s,%s,%s)", (pub["id"], request.remote_addr or "", pub["role"]))
     ver = db.q1("SELECT definition FROM process_versions "
                 "WHERE process_id=%s AND version=%s",
                 (pub["process_id"], pub["pinned_version"]))
     definition = ver["definition"] if isinstance(ver["definition"], dict) \
         else json.loads(ver["definition"])
-    return jsonify(process_key=key, pinned_version=pub["pinned_version"],
-                   definition=definition)
+    definition = _definition_for_role(definition, pub["role"])
+    return jsonify(process_key=pub["process_key"], role=pub["role"],
+                   pinned_version=pub["pinned_version"], definition=definition)
+
+
+@app.post("/api/r/<key>/<token>/execute")
+def execute_public(key, token):
+    """The public, no-login counterpart to execute-all: same box-running
+    logic (via _execute_boxes), scoped to this link's role, and never given
+    a form box — a public link can show data, not write it."""
+    pub = _resolve_pub(key, token)
+    if not pub:
+        return jsonify(error="this link is not live"), 404
+    body = request.get_json(silent=True) or {}
+    ver = db.q1("SELECT definition FROM process_versions "
+                "WHERE process_id=%s AND version=%s",
+                (pub["process_id"], pub["pinned_version"]))
+    definition = ver["definition"] if isinstance(ver["definition"], dict) \
+        else json.loads(ver["definition"])
+    definition = _definition_for_role(definition, pub["role"])
+
+    conn_row = _connection_for(cid=pub["connection_id"])
+    if not conn_row:
+        return jsonify(error="no data connection configured"), 400
+    try:
+        cat = _catalogue(conn_row)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=f"could not read the catalogue: {exc}"), 502
+
+    state = body.get("filters") or {}
+    results = _execute_boxes(definition, state, conn_row, cat, allow_forms=False)
+    return jsonify(results=results)
 
 
 @app.get("/api/health")
