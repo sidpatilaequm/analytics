@@ -21,6 +21,7 @@ jobs:
             git pull origin main &&
             cd backend &&
             source .venv/bin/activate &&
+            python migrate_publications.py &&
             pip install -r requirements.txt &&
             deactivate &&
             cd ../frontend &&
