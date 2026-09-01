@@ -167,16 +167,20 @@ function Shell() {
     reloadReports();
   };
 
-  const publish = async () => {
-    if (state.published) {
-      await api.unpublish(state.processKey);
-      dispatch({ type: "published", published: null });
-    } else {
-      await save();
-      const r = await api.publish(state.processKey);
-      dispatch({ type: "published", published: r });
+    const publish = async () => {
+    try {
+      if (state.published) {
+        await api.unpublish(state.processKey);
+        dispatch({ type: "published", published: null });
+      } else {
+        await save();
+        const r = await api.publish(state.processKey);
+        dispatch({ type: "published", published: r });
+      }
+      reloadReports();
+    } catch (e) {
+      dispatch({ type: "error", error: e.message });
     }
-    reloadReports();
   };
 
   const editing = state.view === "editor";

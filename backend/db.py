@@ -15,6 +15,8 @@ INFORMATION_SCHEMA. Anything not in that catalogue never reaches a query.
 """
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import threading
 from contextlib import contextmanager
 

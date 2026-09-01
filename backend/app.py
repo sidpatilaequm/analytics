@@ -584,12 +584,25 @@ def publish(key):
     row = db.q1("SELECT id, version FROM processes WHERE process_key=%s", (key,))
     if not row:
         return jsonify(error="no such report"), 404
-    db.execute("UPDATE publications SET is_active=0 WHERE process_id=%s", (row["id"],))
     links = []
     for role in PUBLIC_ROLES:
-        token = secrets.token_urlsafe(16)
-        db.execute("INSERT INTO publications (process_id,token,role,pinned_version) "
-                   "VALUES (%s,%s,%s,%s)", (row["id"], token, role, row["version"]))
+        existing = db.q1(
+            "SELECT token FROM publications WHERE process_id=%s AND role=%s "
+            "ORDER BY id DESC LIMIT 1",
+            (row["id"], role))
+        if existing:
+            # This role already has a permanent link for this report — reuse
+            # it (whether it was active or not), and just repoint which
+            # version it shows and mark it live again.
+            token = existing["token"]
+            db.execute(
+                "UPDATE publications SET pinned_version=%s, is_active=1 "
+                "WHERE process_id=%s AND role=%s",
+                (row["version"], row["id"], role))
+        else:
+            token = secrets.token_urlsafe(16)
+            db.execute("INSERT INTO publications (process_id,token,role,pinned_version) "
+                       "VALUES (%s,%s,%s,%s)", (row["id"], token, role, row["version"]))
         links.append({"role": role, "url": f"/r/{key}/{token}"})
     return jsonify(links=links, pinned_version=row["version"])
 
