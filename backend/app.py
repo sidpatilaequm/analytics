@@ -616,6 +616,35 @@ def unpublish(key):
     return jsonify(ok=True)
 
 
+@app.get("/api/processes/published")
+@auth()
+def list_published():
+    """Every currently-active publication for one role, for a trusted server-side caller only
+    (behind @auth() — the vendor_portal employee/vendor portals reach this via backend_java's own
+    service credential, never directly from an employee's browser). Unlike /api/r/<key>/<token>,
+    this is a listing/discovery endpoint, so it stays authenticated rather than public — a
+    published report shouldn't be enumerable by anyone who doesn't already hold its link.
+    Returns the full working URL (with the /analytics prefix nginx actually proxies) rather than
+    the bare token, since the caller is meant to use it directly, not re-derive it."""
+    role = request.args.get("role", "")
+    if not role:
+        return jsonify(error="role is required"), 400
+    rows = db.qall(
+        "SELECT p.process_key, p.name, p.updated_at, pub.token "
+        "FROM publications pub JOIN processes p ON p.id = pub.process_id "
+        "WHERE pub.role=%s AND pub.is_active=1 ORDER BY p.updated_at DESC",
+        (role,))
+    return jsonify(reports=[
+        {
+            "key": r["process_key"],
+            "name": r["name"],
+            "updatedAt": r["updated_at"],
+            "url": f"/analytics/r/{r['process_key']}/{r['token']}",
+        }
+        for r in rows
+    ])
+
+
 @app.get("/api/r/<key>/<token>")
 def resolve_public(key, token):
     """What a published link resolves to: the report's definition, trimmed
