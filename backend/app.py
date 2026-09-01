@@ -584,8 +584,15 @@ def publish(key):
     row = db.q1("SELECT id, version FROM processes WHERE process_key=%s", (key,))
     if not row:
         return jsonify(error="no such report"), 404
+
+    body = request.get_json(silent=True) or {}
+    requested_roles = body.get("roles")
+    # No body / no "roles" key => every existing caller keeps today's behavior (publish to
+    # everyone). An explicit empty list is meaningful though — respected as "no roles selected".
+    roles = PUBLIC_ROLES if requested_roles is None else [r for r in requested_roles if r in PUBLIC_ROLES]
+
     links = []
-    for role in PUBLIC_ROLES:
+    for role in roles:
         existing = db.q1(
             "SELECT token FROM publications WHERE process_id=%s AND role=%s "
             "ORDER BY id DESC LIMIT 1",
@@ -604,6 +611,17 @@ def publish(key):
             db.execute("INSERT INTO publications (process_id,token,role,pinned_version) "
                        "VALUES (%s,%s,%s,%s)", (row["id"], token, role, row["version"]))
         links.append({"role": role, "url": f"/r/{key}/{token}"})
+
+    # Any role that WAS active but isn't in this publish's selection goes inactive — this is
+    # what makes "publish to employee only" actually mean only employee, not "employee plus
+    # whatever roles were active from a previous publish."
+    dropped_roles = [r for r in PUBLIC_ROLES if r not in roles]
+    if dropped_roles:
+        placeholders = ",".join(["%s"] * len(dropped_roles))
+        db.execute(
+            f"UPDATE publications SET is_active=0 WHERE process_id=%s AND role IN ({placeholders})",
+            (row["id"], *dropped_roles))
+
     return jsonify(links=links, pinned_version=row["version"])
 
 

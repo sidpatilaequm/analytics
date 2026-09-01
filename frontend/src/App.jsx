@@ -11,6 +11,14 @@ import Canvas from "./components/Canvas.jsx";
 import { Reports, Settings } from "./components/Views.jsx";
 import PublicReport from "./components/PublicReport.jsx";
 
+// Mirrors backend/app.py's PUBLIC_ROLES — kept as a small labeled list here since the picker
+// needs display labels, not just the raw role keys the API takes.
+const ROLE_OPTIONS = [
+  { value: "vendor", label: "Vendor" },
+  { value: "admin", label: "Admin" },
+  { value: "employee", label: "Employee" },
+];
+
 /* Single sign-on from the admin portal: embedded in an iframe, the portal
    mints a short-lived token server-side (it holds the real login, never
    shipped to the browser) and hands it over as ?sso_token=. Consumed once
@@ -45,8 +53,33 @@ function clearDraft(key) {
   try { localStorage.removeItem(DRAFT_PREFIX + key); } catch { /* nothing to clear */ }
 }
 
-export default function App() {
+// This app is served under a base path in production (VITE_BASE_PATH=/analytics/, set by the
+// deploy workflow; nginx's `alias` for that location does not strip the prefix from the URL the
+// browser sees) but at "/" in dev — Vite exposes whichever is actually in effect as
+// import.meta.env.BASE_URL. Checking window.location.pathname against a bare "/r/" prefix
+// without accounting for that base ignored every real published link in production and fell
+// through to the login shell below instead (the base path is only 1 segment deep in practice,
+// so a plain string slice is enough — this doesn't need full path-matching).
+function pathRelativeToBase() {
+  const base = import.meta.env.BASE_URL || "/";
   const path = window.location.pathname;
+  if (base !== "/" && path.startsWith(base)) {
+    return "/" + path.slice(base.length);
+  }
+  return path;
+}
+
+// The inverse — backend/app.py's publish() hands back a bare "/r/<key>/<token>" (base-agnostic,
+// so it stays reusable by anything else that reads a publication row directly). The browser
+// needs it under this app's actual base path to work as a real, clickable/copyable link.
+function fullPublicUrl(bareUrl) {
+  const base = import.meta.env.BASE_URL || "/";
+  const prefix = base.endsWith("/") ? base.slice(0, -1) : base;
+  return prefix + bareUrl;
+}
+
+export default function App() {
+  const path = pathRelativeToBase();
 
   const [signedIn, setSignedIn] = React.useState(false);
 
@@ -71,10 +104,25 @@ function Shell() {
     const [pubRole, setPubRole] = React.useState("vendor");
   const [exporting, setExporting] = React.useState(null);
   const [recoverable, setRecoverable] = React.useState(null); // {doc, savedAt}
+  // Which roles the picker has checked — defaults to "everyone" (today's one-click behavior)
+  // until synced below to whatever a report already published turns out to actually have live.
+  const [selectedRoles, setSelectedRoles] = React.useState(
+    () => new Set(ROLE_OPTIONS.map((r) => r.value)));
 
   React.useEffect(() => {
-    if (state.published?.links?.length) setPubRole(state.published.links[0].role);
+    if (state.published?.links?.length) {
+      setPubRole(state.published.links[0].role);
+      setSelectedRoles(new Set(state.published.links.map((l) => l.role)));
+    }
   }, [state.published]);
+
+  const toggleRole = (role) => {
+    setSelectedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role); else next.add(role);
+      return next;
+    });
+  };
 
   /* Autosave a draft locally whenever there are unsaved changes. */
   React.useEffect(() => {
@@ -172,11 +220,24 @@ function Shell() {
       if (state.published) {
         await api.unpublish(state.processKey);
         dispatch({ type: "published", published: null });
+        setSelectedRoles(new Set(ROLE_OPTIONS.map((r) => r.value)));
       } else {
         await save();
-        const r = await api.publish(state.processKey);
+        const r = await api.publish(state.processKey, [...selectedRoles]);
         dispatch({ type: "published", published: r });
       }
+      reloadReports();
+    } catch (e) {
+      dispatch({ type: "error", error: e.message });
+    }
+  };
+
+  // Live already, and the designer is changing which roles see it (without a full
+  // unpublish/republish round trip) — same endpoint, just called again with the new selection.
+  const republishRoles = async () => {
+    try {
+      const r = await api.publish(state.processKey, [...selectedRoles]);
+      dispatch({ type: "published", published: r });
       reloadReports();
     } catch (e) {
       dispatch({ type: "error", error: e.message });
@@ -232,7 +293,28 @@ function Shell() {
             {exporting === "xlsx" ? "Preparing…" : "Excel"}
           </button>
           <span className="pbsep" />
-          <button className={`pb ${state.published ? "live" : "go"}`} onClick={publish}>
+          <details className="roledrop">
+            <summary className="pb">Publish to &#9662;</summary>
+            <div className="roledrop-panel">
+              {ROLE_OPTIONS.map((r) => (
+                <label key={r.value} className="roledrop-opt">
+                  <input
+                    type="checkbox"
+                    checked={selectedRoles.has(r.value)}
+                    onChange={() => toggleRole(r.value)}
+                  />
+                  {r.label}
+                </label>
+              ))}
+            </div>
+          </details>
+          {state.published && (
+            <button className="pb" disabled={selectedRoles.size === 0} onClick={republishRoles}>
+              Update roles
+            </button>
+          )}
+          <button className={`pb ${state.published ? "live" : "go"}`}
+            disabled={!state.published && selectedRoles.size === 0} onClick={publish}>
             {state.published ? "Unpublish" : "Publish"}
           </button>
             <button className="pb" onClick={() => leave("reports")}>Close</button>
@@ -263,8 +345,8 @@ function Shell() {
                     <option key={l.role} value={l.role}>{l.role}</option>
                   ))}
                 </select>
-                <code>{window.location.origin + current.url}</code>
-                <a className="prim" href={current.url} target="_blank" rel="noopener noreferrer">
+                <code>{window.location.origin + fullPublicUrl(current.url)}</code>
+                <a className="prim" href={fullPublicUrl(current.url)} target="_blank" rel="noopener noreferrer">
                   Open
                 </a>
               </div>

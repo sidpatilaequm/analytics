@@ -100,7 +100,7 @@ const api = {
   filterOptions: (key, clientId) =>
     call(`/processes/${key}/filters/${clientId}/options`),
 
-  publish: (key) => call(`/processes/${key}/publish`, { method: "POST" }),
+  publish: (key, roles) => call(`/processes/${key}/publish`, { method: "POST", body: { roles } }),
   unpublish: (key) => call(`/processes/${key}/unpublish`, { method: "POST" }),
   
 
