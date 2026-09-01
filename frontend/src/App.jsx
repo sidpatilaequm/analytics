@@ -187,9 +187,9 @@ function Shell() {
 
   if (!signedIn) return <Login onDone={() => setSignedIn(true)} />;
 
-  const openReport = async (key) => {
+  const openReport = async (key, mode) => {
     const full = await api.process(key);
-    dispatch({ type: "open", doc: full.definition, key, connectionId: full.connection_id });
+    dispatch({ type: "open", doc: full.definition, key, connectionId: full.connection_id, mode });
     reloadCatalog();
   };
 

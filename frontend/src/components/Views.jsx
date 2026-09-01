@@ -181,6 +181,14 @@ export function Reports({ onOpen, onNew, reload }) {
 
                 <button
                   className="sbtn"
+                  onClick={() => onOpen(r.process_key, "preview")}
+                  title="See exactly what a viewer would see — no editing controls"
+                >
+                  Preview
+                </button>
+
+                <button
+                  className="sbtn"
                   onClick={() => duplicate(r)}
                 >
                   Duplicate

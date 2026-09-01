@@ -91,7 +91,7 @@ export function reducer(state, a) {
         ...state, view: "editor", doc: migrate(a.doc), processKey: a.key,
         connectionId: a.connectionId ?? state.connectionId,
         dirty: false, sel: null, cfgOpen: false, results: {}, filterState: {},
-        published: a.published || null, mode: "design",
+        published: a.published || null, mode: a.mode || "design",
       };
     case "close":
       return { ...state, view: "reports", processKey: null, doc: blankDoc(),
