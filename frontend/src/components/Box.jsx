@@ -8,7 +8,7 @@ import { useStore } from "../store.jsx";
 import Chart, { Legend, legendItems } from "../charts/Chart.jsx";
 import {
   AGGS, BOX_KINDS, CHARTS, FMTS, colOptions, fmtCell, fmtNumber,
-  frameStyle, normS, styleObj, widthOptions,
+  frameStyle, normS, styleObj, widthOptions, uid,
 } from "../model.js";
 import {
   Check, Chips, ConfirmBar, DeleteButton, Field, FormatPanel, FrameControls,
@@ -187,11 +187,149 @@ function Body({ box }) {
     );
   }
 
-  /* table */
+    /* table */
+  if (box.tableMode === "manual") {
+    const t = box.manualTable;
+
+    return (
+      <div className="manual-table-wrap">
+        <table className="rt manual-table">
+          <thead>
+            <tr>
+              {t.columns.map((col, colIndex) => (
+                <th
+                  key={col.id}
+                  style={styleObj(normS(t.headStyle))}
+                >
+                  <Editable
+                    value={col.label}
+                    placeholder="Column name"
+                    onChange={(v) =>
+                      dispatch({
+                        type: "set",
+                        target: "box",
+                        id: box.id,
+                        path: `manualTable.columns.${colIndex}.label`,
+                        value: v,
+                      })
+                    }
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {t.rows.map((row, rowIndex) => (
+              <tr
+                key={row.id}
+                className={t.zebra && rowIndex % 2 ? "z" : undefined}
+              >
+                {t.columns.map((col, colIndex) => (
+                  <td key={col.id}>
+                    <Editable
+                      value={row.cells[colIndex] || ""}
+                      placeholder=""
+                      onChange={(v) =>
+                        dispatch({
+                          type: "set",
+                          target: "box",
+                          id: box.id,
+                          path: `manualTable.rows.${rowIndex}.cells.${colIndex}`,
+                          value: v,
+                        })
+                      }
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {state.mode === "design" && (
+          <div className="manual-table-actions">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+
+                const nextRows = [
+                  ...t.rows,
+                  {
+                    id: `row_${Date.now()}`,
+                    cells: t.columns.map(() => ""),
+                  },
+                ];
+
+                dispatch({
+                  type: "set",
+                  target: "box",
+                  id: box.id,
+                  path: "manualTable.rows",
+                  value: nextRows,
+                });
+              }}
+            >
+              + Add Row
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+
+                const newColumn = {
+                  id: `col_${Date.now()}`,
+                  label: `Column ${t.columns.length + 1}`,
+                };
+
+                const nextColumns = [
+                  ...t.columns,
+                  newColumn,
+                ];
+
+                const nextRows = t.rows.map((row) => ({
+                  ...row,
+                  cells: [...row.cells, ""],
+                }));
+
+                dispatch({
+                  type: "set",
+                  target: "box",
+                  id: box.id,
+                  path: "manualTable.columns",
+                  value: nextColumns,
+                });
+
+                dispatch({
+                  type: "set",
+                  target: "box",
+                  id: box.id,
+                  path: "manualTable.rows",
+                  value: nextRows,
+                });
+              }}
+            >
+              + Add Column
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* DATA TABLE */
   const c = box.table;
   const shown = c.columns.filter((x) => x.on);
+
   if (!shown.length)
-    return <div className="empty">No columns selected. Open <b>⚙ Set up</b> and tick some.</div>;
+    return (
+      <div className="empty">
+        No columns selected. Open <b>⚙ Set up</b> and tick some.
+      </div>
+    );
+
   const rows = result?.rows || [];
   const [msg, sub] = stateNote(box, state.catalog);
   const alias = (ref) => ref.replace(/\./g, "__");
@@ -202,52 +340,105 @@ function Body({ box }) {
         <tr>
           {shown.map((col) => {
             const i = c.columns.indexOf(col);
+
             return (
-              <th key={col.col} className={col.align === "right" ? "num" : undefined}
-                style={{ ...styleObj(normS(c.headStyle)), ...(col.width ? { width: col.width } : {}) }}>
-                <Editable value={col.label} placeholder="name"
-                  onChange={(v) => dispatch({ type: "set", target: "box", id: box.id,
-                    path: `table.columns.${i}.label`, value: v })} />
+              <th
+                key={col.col}
+                className={col.align === "right" ? "num" : undefined}
+                style={{
+                  ...styleObj(normS(c.headStyle)),
+                  ...(col.width ? { width: col.width } : {}),
+                }}
+              >
+                <Editable
+                  value={col.label}
+                  placeholder="name"
+                  onChange={(v) =>
+                    dispatch({
+                      type: "set",
+                      target: "box",
+                      id: box.id,
+                      path: `table.columns.${i}.label`,
+                      value: v,
+                    })
+                  }
+                />
               </th>
             );
           })}
         </tr>
       </thead>
+
       <tbody>
-        {rows.length ? rows.slice(0, c.limit || 10).map((r, i) => (
-          <tr key={i} className={c.zebra && i % 2 ? "z" : undefined}>
-            {shown.map((col) => (
-              <td key={col.col}
-                className={col.align === "right" ? "num" : undefined}
-                style={col.align === "center" ? { textAlign: "center" } : undefined}>
-                {fmtCell(r[alias(col.col)], col.fmt, locale)}
-              </td>
-            ))}
-          </tr>
-        )) : (
+        {rows.length ? (
+          rows.slice(0, c.limit || 10).map((r, i) => (
+            <tr key={i} className={c.zebra && i % 2 ? "z" : undefined}>
+              {shown.map((col) => (
+                <td
+                  key={col.col}
+                  className={col.align === "right" ? "num" : undefined}
+                  style={
+                    col.align === "center"
+                      ? { textAlign: "center" }
+                      : undefined
+                  }
+                >
+                  {fmtCell(r[alias(col.col)], col.fmt, locale)}
+                </td>
+              ))}
+            </tr>
+          ))
+        ) : (
           <>
             {[0, 1, 2].map((i) => (
-              <tr key={i} className={`ghost${c.zebra && i % 2 ? " z" : ""}`}>
+              <tr
+                key={i}
+                className={`ghost${c.zebra && i % 2 ? " z" : ""}`}
+              >
                 {shown.map((col) => (
-                  <td key={col.col} className={col.align === "right" ? "num" : undefined}>—</td>
+                  <td
+                    key={col.col}
+                    className={col.align === "right" ? "num" : undefined}
+                  >
+                    —
+                  </td>
                 ))}
               </tr>
             ))}
+
             <tr>
-              <td className="ghost-note" colSpan={shown.length}>{msg} · {sub}</td>
+              <td className="ghost-note" colSpan={shown.length}>
+                {msg} · {sub}
+              </td>
             </tr>
           </>
         )}
       </tbody>
+
       {c.totals && rows.length > 0 && (
         <tfoot>
           <tr>
             {shown.map((col, i) => {
-              const isNum = typeof rows[0][alias(col.col)] === "number";
+              const isNum =
+                typeof rows[0][alias(col.col)] === "number";
+
               return (
-                <td key={col.col} className={col.align === "right" ? "num" : undefined}>
-                  {i === 0 ? "Total" : isNum
-                    ? fmtCell(rows.reduce((a, r) => a + (+r[alias(col.col)] || 0), 0), col.fmt, locale)
+                <td
+                  key={col.col}
+                  className={col.align === "right" ? "num" : undefined}
+                >
+                  {i === 0
+                    ? "Total"
+                    : isNum
+                    ? fmtCell(
+                        rows.reduce(
+                          (a, r) =>
+                            a + (+r[alias(col.col)] || 0),
+                          0
+                        ),
+                        col.fmt,
+                        locale
+                      )
                     : ""}
                 </td>
               );
@@ -304,7 +495,28 @@ function Panel({ box, cols }) {
           </Toggles>
           {box.kind === "value" && <ValueFormat box={box} set={set} />}
           {box.kind === "chart" && <ChartFormat box={box} set={set} />}
-          {box.kind === "table" && <TableFormat box={box} set={set} />}
+          {box.kind === "table" && (
+            <>
+              <Group>Table type</Group>
+
+              <SegBar
+                value={box.tableMode || "data"}
+                options={[
+                  ["data", "Data table"],
+                  ["manual", "Manual table"],
+                ]}
+                onChange={(v) => set("tableMode", v)}
+              />
+
+              {box.tableMode !== "manual" && (
+                <TableData box={box} set={set} />
+              )}
+
+              {box.tableMode === "manual" && (
+                <ManualTableData box={box} set={set} />
+              )}
+            </>
+          )}
           <Group>Remove</Group>
           <DeleteButton what="this box" onClick={del} />
         </>
@@ -338,7 +550,28 @@ function Panel({ box, cols }) {
 
           {box.kind === "value" && <ValueData box={box} set={set} />}
           {box.kind === "chart" && <ChartData box={box} set={set} />}
-          {box.kind === "table" && <TableData box={box} set={set} />}
+          {box.kind === "table" && (
+            <>
+              <Group>Table type</Group>
+
+              <SegBar
+                value={box.tableMode || "data"}
+                options={[
+                  ["data", "Data table"],
+                  ["manual", "Manual table"],
+                ]}
+                onChange={(v) => set("tableMode", v)}
+              />
+
+              {box.tableMode !== "manual" && (
+                <TableData box={box} set={set} />
+              )}
+
+              {box.tableMode === "manual" && (
+                <ManualTableData box={box} set={set} />
+              )}
+            </>
+        )}
           {box.kind === "note" && (
             <Hint>Click into the box and type. Use <b>Format</b> for size, colour and alignment.</Hint>
           )}
@@ -562,51 +795,489 @@ function ChartFormat({ box, set }) {
 
 /* ---- table ---- */
 function TableData({ box, set }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
+
+  const isManual = box.tableMode === "manual";
   const c = box.table;
+  const m = box.manualTable;
+
+  const addRow = () => {
+    const nextRows = [
+      ...m.rows,
+      {
+        id: `row_${Date.now()}`,
+        cells: m.columns.map(() => ""),
+      },
+    ];
+
+    set("manualTable.rows", nextRows);
+  };
+
+  const addColumn = () => {
+    const nextColumns = [
+      ...m.columns,
+      {
+        id: `col_${Date.now()}`,
+        label: `Column ${m.columns.length + 1}`,
+      },
+    ];
+
+    const nextRows = m.rows.map((row) => ({
+      ...row,
+      cells: [...row.cells, ""],
+    }));
+
+    set("manualTable.columns", nextColumns);
+    set("manualTable.rows", nextRows);
+  };
+
+  const removeRow = (index) => {
+    if (m.rows.length <= 1) return;
+    set(
+      "manualTable.rows",
+      m.rows.filter((_, i) => i !== index)
+    );
+  };
+
+  const removeColumn = (index) => {
+    if (m.columns.length <= 1) return;
+
+    set(
+      "manualTable.columns",
+      m.columns.filter((_, i) => i !== index)
+    );
+
+    set(
+      "manualTable.rows",
+      m.rows.map((row) => ({
+        ...row,
+        cells: row.cells.filter((_, i) => i !== index),
+      }))
+    );
+  };
+
   return (
     <>
-      <Group>Rows</Group>
+      <Group>Table type</Group>
+
+      <Chips
+        value={box.tableMode || "data"}
+        onChange={(v) => set("tableMode", v)}
+        options={[
+          ["data", "Data Table"],
+          ["manual", "Manual Table"],
+        ]}
+      />
+
+      {isManual ? (
+        <>
+          <Group>Manual table</Group>
+
+          <Hint>
+            Add columns and rows here. Click headings and cells directly
+            inside the table to type your content.
+          </Hint>
+
+          <div className="collist">
+            {m.columns.map((col, i) => (
+              <div className="colrow" key={col.id}>
+                <span>
+                  <Text
+                    value={col.label}
+                    placeholder={`Column ${i + 1}`}
+                    onChange={(v) =>
+                      set(`manualTable.columns.${i}.label`, v)
+                    }
+                  />
+                </span>
+
+                <button
+                  type="button"
+                  className="xbtn warn"
+                  title="Remove column"
+                  onClick={() => removeColumn(i)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="pb"
+              onClick={addColumn}
+            >
+              + Add Column
+            </button>
+          </div>
+
+          <Group>Rows</Group>
+
+          <div className="collist">
+            {m.rows.map((row, i) => (
+              <div className="colrow" key={row.id}>
+                <span>
+                  Row {i + 1}
+                </span>
+
+                <button
+                  type="button"
+                  className="xbtn warn"
+                  title="Remove row"
+                  onClick={() => removeRow(i)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="pb"
+              onClick={addRow}
+            >
+              + Add Row
+            </button>
+          </div>
+
+          <Hint>
+            The actual cell values can be typed directly into the table.
+          </Hint>
+        </>
+      ) : (
+        <>
+          <Group>Rows</Group>
+
+          <Row>
+            <Field label="Rows">
+              <Select
+                value={c.limit}
+                numeric
+                options={[5, 8, 10, 15, 25, 50]}
+                onChange={(v) => set("table.limit", v)}
+              />
+            </Field>
+
+            <Field label="Sort by">
+              <Select
+                value={c.sort}
+                options={["", ...c.columns.map((x) => x.col)]}
+                onChange={(v) => set("table.sort", v)}
+              />
+            </Field>
+
+            <Field label="Order">
+              <Select
+                value={c.dir}
+                options={[
+                  ["asc", "A → Z"],
+                  ["desc", "Z → A"],
+                ]}
+                onChange={(v) => set("table.dir", v)}
+              />
+            </Field>
+          </Row>
+
+          <Group>Columns — order, tick, rename, format</Group>
+
+          <div className="collist">
+            {c.columns.map((col, i) => (
+              <div className="colrow" key={col.col}>
+                <span className="colmv">
+                  <button
+                    className="xbtn"
+                    title="Move up"
+                    onClick={() =>
+                      dispatch({
+                        type: "moveColumn",
+                        id: box.id,
+                        index: i,
+                        d: -1,
+                      })
+                    }
+                  >
+                    ↑
+                  </button>
+
+                  <button
+                    className="xbtn"
+                    title="Move down"
+                    onClick={() =>
+                      dispatch({
+                        type: "moveColumn",
+                        id: box.id,
+                        index: i,
+                        d: 1,
+                      })
+                    }
+                  >
+                    ↓
+                  </button>
+                </span>
+
+                <input
+                  type="checkbox"
+                  checked={!!col.on}
+                  onChange={(e) =>
+                    set(`table.columns.${i}.on`, e.target.checked)
+                  }
+                />
+
+                <span>
+                  <Text
+                    value={col.label}
+                    onChange={(v) =>
+                      set(`table.columns.${i}.label`, v)
+                    }
+                  />
+
+                  <div className="cn">{col.col}</div>
+                </span>
+
+                <Select
+                  value={col.fmt}
+                  options={FMTS}
+                  onChange={(v) =>
+                    set(`table.columns.${i}.fmt`, v)
+                  }
+                />
+
+                <Select
+                  value={col.align}
+                  options={[
+                    ["left", "Left"],
+                    ["center", "Centre"],
+                    ["right", "Right"],
+                  ]}
+                  onChange={(v) =>
+                    set(`table.columns.${i}.align`, v)
+                  }
+                />
+
+                <Text
+                  value={col.width}
+                  placeholder="auto"
+                  onChange={(v) =>
+                    set(`table.columns.${i}.width`, v)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <Hint>
+            Headings are also editable straight in the rendered table.
+          </Hint>
+
+          <SourceEditor box={box} />
+        </>
+      )}
+    </>
+  );
+}
+/* ---- manual table ---- */
+function ManualTableData({ box, set }) {
+  const { dispatch } = useStore();
+  const c = box.manualTable;
+
+  const addColumn = () => {
+    const newColumns = [
+      ...c.columns,
+      {
+        id: uid("col"),
+        label: `Column ${c.columns.length + 1}`,
+      },
+    ];
+
+    const newRows = c.rows.map((row) => ({
+      ...row,
+      cells: [...row.cells, ""],
+    }));
+
+    set("manualTable.columns", newColumns);
+    set("manualTable.rows", newRows);
+  };
+
+  const removeColumn = (index) => {
+    if (c.columns.length <= 1) return;
+
+    const newColumns = c.columns.filter((_, i) => i !== index);
+
+    const newRows = c.rows.map((row) => ({
+      ...row,
+      cells: row.cells.filter((_, i) => i !== index),
+    }));
+
+    set("manualTable.columns", newColumns);
+    set("manualTable.rows", newRows);
+  };
+
+  const addRow = () => {
+    const newRow = {
+      id: uid("row"),
+      cells: c.columns.map(() => ""),
+    };
+
+    set("manualTable.rows", [...c.rows, newRow]);
+  };
+
+  const removeRow = (index) => {
+    if (c.rows.length <= 1) return;
+
+    set(
+      "manualTable.rows",
+      c.rows.filter((_, i) => i !== index)
+    );
+  };
+
+  return (
+    <>
+      <Group>Manual table</Group>
+
       <Row>
-        <Field label="Rows">
-          <Select value={c.limit} numeric options={[5, 8, 10, 15, 25, 50]}
-            onChange={(v) => set("table.limit", v)} />
-        </Field>
-        <Field label="Sort by">
-          <Select value={c.sort} options={["", ...c.columns.map((x) => x.col)]}
-            onChange={(v) => set("table.sort", v)} />
-        </Field>
-        <Field label="Order">
-          <Select value={c.dir} options={[["asc", "A → Z"], ["desc", "Z → A"]]}
-            onChange={(v) => set("table.dir", v)} />
-        </Field>
+        <button
+          className="pb"
+          type="button"
+          onClick={addColumn}
+        >
+          + Add column
+        </button>
+
+        <button
+          className="pb"
+          type="button"
+          onClick={addRow}
+        >
+          + Add row
+        </button>
       </Row>
-      <Group>Columns — order, tick, rename, format</Group>
+
+      <Group>Columns</Group>
+
       <div className="collist">
         {c.columns.map((col, i) => (
-          <div className="colrow" key={col.col}>
-            <span className="colmv">
-              <button className="xbtn" title="Move up"
-                onClick={() => dispatch({ type: "moveColumn", id: box.id, index: i, d: -1 })}>↑</button>
-              <button className="xbtn" title="Move down"
-                onClick={() => dispatch({ type: "moveColumn", id: box.id, index: i, d: 1 })}>↓</button>
-            </span>
-            <input type="checkbox" checked={!!col.on}
-              onChange={(e) => set(`table.columns.${i}.on`, e.target.checked)} />
-            <span>
-              <Text value={col.label} onChange={(v) => set(`table.columns.${i}.label`, v)} />
-              <div className="cn">{col.col}</div>
-            </span>
-            <Select value={col.fmt} options={FMTS} onChange={(v) => set(`table.columns.${i}.fmt`, v)} />
-            <Select value={col.align} options={[["left", "Left"], ["center", "Centre"], ["right", "Right"]]}
-              onChange={(v) => set(`table.columns.${i}.align`, v)} />
-            <Text value={col.width} placeholder="auto"
-              onChange={(v) => set(`table.columns.${i}.width`, v)} />
+          <div
+            className="colrow"
+            key={col.id}
+          >
+            <Text
+              value={col.label}
+              placeholder={`Column ${i + 1}`}
+              onChange={(v) =>
+                set(
+                  `manualTable.columns.${i}.label`,
+                  v
+                )
+              }
+            />
+
+            <button
+              className="xbtn"
+              type="button"
+              title="Remove column"
+              onClick={() => removeColumn(i)}
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>
-      <Hint>Headings are also editable straight in the rendered table.</Hint>
-      <SourceEditor box={box} />
+
+      <Group>Table data</Group>
+
+      <div
+        style={{
+          overflowX: "auto",
+          border: "1px solid #D5DDDA",
+          borderRadius: 6,
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+          }}
+        >
+          <thead>
+            <tr>
+              {c.columns.map((col) => (
+                <th
+                  key={col.id}
+                  style={{
+                    padding: 8,
+                    borderBottom: "1px solid #D5DDDA",
+                    textAlign: "left",
+                  }}
+                >
+                  {col.label || "Untitled"}
+                </th>
+              ))}
+
+              <th
+                style={{
+                  width: 40,
+                }}
+              />
+            </tr>
+          </thead>
+
+          <tbody>
+            {c.rows.map((row, rowIndex) => (
+              <tr key={row.id}>
+                {c.columns.map((col, colIndex) => (
+                  <td
+                    key={col.id}
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid #E7ECEA",
+                    }}
+                  >
+                    <input
+                      value={
+                        row.cells[colIndex] ?? ""
+                      }
+                      onChange={(e) =>
+                        set(
+                          `manualTable.rows.${rowIndex}.cells.${colIndex}`,
+                          e.target.value
+                        )
+                      }
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        outline: "none",
+                        padding: 6,
+                        background: "transparent",
+                      }}
+                    />
+                  </td>
+                ))}
+
+                <td>
+                  <button
+                    className="xbtn"
+                    type="button"
+                    title="Remove row"
+                    onClick={() =>
+                      removeRow(rowIndex)
+                    }
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <Hint>
+        Add columns and rows, then type directly into each cell.
+      </Hint>
     </>
   );
 }

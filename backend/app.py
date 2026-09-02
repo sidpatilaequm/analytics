@@ -494,11 +494,29 @@ def write_box(key):
 # exporting — PDF / PPTX / XLSX, all built from the same computed results
 # --------------------------------------------------------------------------
 EXPORT_KINDS = {
-    "pdf": ("application/pdf", exporters.build_pdf),
-    "pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",
-             exporters.build_pptx),
-    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-             exporters.build_xlsx),
+    "pdf": (
+        "application/pdf",
+        exporters.build_pdf,
+        "pdf",
+    ),
+
+    "pptx": (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        exporters.build_pptx,
+        "pptx",
+    ),
+
+    "xlsx": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        exporters.build_xlsx,
+        "xlsx",
+    ),
+
+    "table": (
+        "application/pdf",
+        exporters.build_table_pdf,
+        "pdf",
+    ),
 }
 
 
@@ -528,15 +546,67 @@ def export_report(key, fmt):
     sections = _render_boxes(definition, results)
     name = definition.get("name") or "report"
 
-    mime, builder = EXPORT_KINDS[fmt]
+    mime, builder, extension = EXPORT_KINDS[fmt]
     data = builder(name, sections)
     safe = re.sub(r"[^\w-]+", "-", name).strip("-").lower() or "report"
 
     resp = app.response_class(data, mimetype=mime)
-    resp.headers["Content-Disposition"] = f'attachment; filename="{safe}.{fmt}"'
+    resp.headers["Content-Disposition"] = f'attachment; filename="{safe}.{extension}"'
     return resp
 
+@app.get("/api/processes/<key>/table")
+@auth()
+def report_table(key):
+    row = db.q1(
+        "SELECT * FROM processes WHERE process_key=%s",
+        (key,)
+    )
 
+    if not row:
+        return jsonify(error="no such report"), 404
+
+    definition = (
+        row["definition"]
+        if isinstance(row["definition"], dict)
+        else json.loads(row["definition"])
+    )
+
+    conn_row = _connection_for(row)
+
+    if not conn_row:
+        return jsonify(error="no data connection configured"), 400
+
+    try:
+        cat = _catalogue(conn_row)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(
+            error=f"could not read the catalogue: {exc}"
+        ), 502
+
+    try:
+        filters = json.loads(
+            request.args.get("filters") or "{}"
+        )
+    except ValueError:
+        filters = {}
+
+    results = _execute_boxes(
+        definition,
+        filters,
+        conn_row,
+        cat,
+        allow_forms=False,
+    )
+
+    sections = _render_boxes(
+        definition,
+        results,
+    )
+
+    return jsonify({
+        "name": definition.get("name") or "report",
+        "sections": sections,
+    })
 # --------------------------------------------------------------------------
 # role-scoped visibility — which boxes/filters a published link may show
 # --------------------------------------------------------------------------

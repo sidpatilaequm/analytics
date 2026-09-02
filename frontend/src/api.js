@@ -1,69 +1,78 @@
 /* One place that talks to the middleware. Everything else imports this. */
-const BASE = import.meta.env.VITE_API_BASE || "/api";
+const BASE = "/api";
 
-let token = sessionStorage.getItem("nexd.token") || "";
+let token = localStorage.getItem("token") || "";
+
 export const setToken = (t) => {
   token = t || "";
-  if (t) sessionStorage.setItem("nexd.token", t);
-  else sessionStorage.removeItem("nexd.token");
+  if (token) {
+    localStorage.setItem("token", token);
+  } else {
+    localStorage.removeItem("token");
+  }
 };
+
 export const hasToken = () => !!token;
 
-async function call(path, { method = "GET", body, signal } = {}) {
+async function call(path, options = {}) {
+  const { body, ...rest } = options;
+
   const res = await fetch(BASE + path, {
-    method,
-    signal,
+    ...rest,
     headers: {
-      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body !== undefined
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(rest.headers || {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  /* Downloads (PDF/PPTX/XLSX exports) aren't JSON, so they go through the
-   browser's normal fetch + blob + temporary-link dance instead of call(). */
-async function download(path, filename) {
-  const res = await fetch(BASE + path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* not JSON */ }
-    throw new Error(msg);
-  }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+
+  if (!res.ok) {
+    throw new Error(
+      data.error || `${res.status} ${res.statusText}`
+    );
+  }
+
   return data;
 }
-/* Downloads (PDF/PPTX/XLSX exports) aren't JSON, so they go through the
-   browser's normal fetch + blob + temporary-link dance instead of call(). */
+
+/* Downloads (PDF/PPTX/XLSX/Table exports) */
 async function download(path, filename) {
   const res = await fetch(BASE + path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: token
+      ? { Authorization: `Bearer ${token}` }
+      : {},
   });
+
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
-    try { const j = await res.json(); if (j.error) msg = j.error; } catch { /* not JSON */ }
+
+    try {
+      const j = await res.json();
+      if (j.error) msg = j.error;
+    } catch {
+      /* Response was not JSON */
+    }
+
     throw new Error(msg);
   }
+
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+
   document.body.appendChild(a);
   a.click();
   a.remove();
+
   URL.revokeObjectURL(url);
 }
 

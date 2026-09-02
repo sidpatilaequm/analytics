@@ -35,8 +35,14 @@ export const FWIDTHS = [["narrow", "S"], ["auto", "M"], ["wide", "L"], ["full", 
 export const FMTS = [["auto", "Auto"], ["text", "Text"], ["number", "Number"],
   ["currency", "Currency"], ["percent", "Percent"], ["date", "Date"]];
 export const BSTYLES = [["solid", "Solid"], ["dashed", "Dashed"], ["dotted", "Dotted"], ["double", "Double"]];
-export const BOX_KINDS = [["value", "Value"], ["chart", "Graph"], ["table", "Table"],
-  ["note", "Note"], ["form", "Form"]];
+export const BOX_KINDS = [
+  ["value", "Value"],
+  ["chart", "Graph"],
+  ["table", "Table"],
+  ["manualTable", "Manual Table"],
+  ["note", "Note"],
+  ["form", "Form"],
+];
 export const PUBLIC_ROLES = [["vendor", "Vendor"], ["admin", "Admin"], ["employee", "Employee"]];
 
 export const S = (o = {}) => ({
@@ -75,6 +81,7 @@ export const newSection = () => ({
 /* A box carries all four configurations, so switching what it shows never
    discards what you already set up for the others. */
 export function ensureConfigs(b) {
+  if (!b.tableMode) b.tableMode = "data";
   if (!b.value) b.value = {
     source: "data", manual: "0", formula: "", agg: "COUNT", column: "",
     prefix: "", suffix: "", decimals: 0, unit: "", delta: "", deltaDir: "up",
@@ -89,14 +96,39 @@ export function ensureConfigs(b) {
   if (!b.table) b.table = {
     columns: [], limit: 8, sort: "", dir: "asc", zebra: true, totals: false, headStyle: S(),
   };
+  if (!b.manualTable) b.manualTable = {
+  columns: [
+    { id: uid("col"), label: "Column 1" },
+    { id: uid("col"), label: "Column 2" },
+    { id: uid("col"), label: "Column 3" },
+  ],
+  rows: [
+    {
+      id: uid("row"),
+      cells: ["", "", ""],
+    },
+  ],
+  zebra: true,
+  headStyle: S(),
+};
   if (!b.note) b.note = { html: "" };
   return b;
 }
 
 export const newBox = (base = "") => ensureConfigs({
-  id: uid("box"), kind: "value", title: "", span: 1,
-  style: S(), titleStyle: S(), frame: F(),
-  useFilters: true, visible: true, titleVisible: true, src: newSrc(base), roles: [],
+  id: uid("box"),
+  kind: "value",
+  tableMode: "data",
+  title: "",
+  span: 1,
+  style: S(),
+  titleStyle: S(),
+  frame: F(),
+  useFilters: true,
+  visible: true,
+  titleVisible: true,
+  src: newSrc(base),
+  roles: [],
 });
 
 /* ---------------- layout helpers ---------------- */

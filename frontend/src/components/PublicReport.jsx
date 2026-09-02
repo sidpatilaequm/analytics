@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from "../store.jsx";
 import Box from "./Box.jsx";
 import { normS, styleObj, frameStyle } from "../model.js";
 
+
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 async function getPublishedReport(slug) {
@@ -148,11 +149,6 @@ function PublicReportInner({ slug }) {
 
   return (
     <div className="pane public-report">
-      <div className="wordmark">
-        <b>NEXD</b>
-        <span>Public Dashboard</span>
-      </div>
-
       <PublicCanvas doc={state.doc} />
     </div>
   );

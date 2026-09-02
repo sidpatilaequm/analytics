@@ -20,49 +20,158 @@ def build_pdf(name, sections):
     )
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40,
-                             leftMargin=40, rightMargin=40)
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("T", parent=styles["Title"], fontSize=20)
-    h2 = ParagraphStyle("H2", parent=styles["Heading2"], spaceBefore=16, fontSize=14)
-    body = styles["BodyText"]
-    value_style = ParagraphStyle("V", parent=body, fontSize=16, spaceAfter=2)
-    note_style = ParagraphStyle("N", parent=body, fontSize=9, textColor=colors.grey)
-    err_style = ParagraphStyle("E", parent=body, textColor=colors.HexColor("#9E332B"))
 
-    story = [Paragraph(_esc(name), title_style), Spacer(1, 10)]
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        topMargin=40,
+        bottomMargin=40,
+        leftMargin=40,
+        rightMargin=40,
+    )
+
+    styles = getSampleStyleSheet()
+    body = styles["BodyText"]
+
+    title_style = ParagraphStyle(
+        "T",
+        parent=styles["Title"],
+        fontSize=20,
+    )
+
+    h2 = ParagraphStyle(
+        "H2",
+        parent=styles["Heading2"],
+        spaceBefore=16,
+        fontSize=14,
+    )
+
+    err_style = ParagraphStyle(
+        "E",
+        parent=body,
+        textColor=colors.HexColor("#9E332B"),
+    )
+
+    story = [
+        Paragraph(_esc(name), title_style),
+        Spacer(1, 10),
+    ]
 
     for sec in sections:
         story.append(Paragraph(_esc(sec["name"]), h2))
+
         if sec.get("desc"):
             story.append(Paragraph(_esc(sec["desc"]), body))
+
         story.append(Spacer(1, 6))
+
         for box in sec["boxes"]:
-            story.append(Paragraph(f"<b>{_esc(box['title'] or 'Untitled')}</b>", body))
+
             if box.get("error"):
-                story.append(Paragraph(_esc(box["error"]), err_style))
+                story.append(
+                    Paragraph(_esc(box["error"]), err_style)
+                )
+
             elif box["kind"] == "value":
-                story.append(Paragraph(_esc(box.get("text", "—")), value_style))
+
+                card_data = [
+                    [
+                        Paragraph(
+                            f"<b>{_esc(box['title'] or 'Untitled')}</b>",
+                            ParagraphStyle(
+                                "CardTitle",
+                                parent=body,
+                                fontSize=11,
+                                textColor=colors.HexColor("#5A6663"),
+                                spaceAfter=8,
+                            ),
+                        )
+                    ],
+                    [
+                        Paragraph(
+                            _esc(box.get("text", "—")),
+                            ParagraphStyle(
+                                "CardValue",
+                                parent=body,
+                                fontSize=24,
+                                leading=28,
+                                alignment=1,
+                                fontName="Helvetica-Bold",
+                            ),
+                        )
+                    ],
+                ]
+
                 if box.get("note"):
-                    story.append(Paragraph(_esc(box["note"]), note_style))
+                    card_data.append([
+                        Paragraph(
+                            _esc(box["note"]),
+                            ParagraphStyle(
+                                "CardNote",
+                                parent=body,
+                                fontSize=8,
+                                textColor=colors.grey,
+                                alignment=1,
+                            ),
+                        )
+                    ])
+
+                card = Table(
+                    card_data,
+                    colWidths=[480],
+                    hAlign="LEFT",
+                )
+
+                card.setStyle(
+                    TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                        ("BOX", (0, 0), (-1, -1), 1,
+                         colors.HexColor("#D5DDDA")),
+                        ("TOPPADDING", (0, 0), (-1, -1), 12),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                    ])
+                )
+
+                story.append(card)
+
             elif box["kind"] in ("chart", "table") and box.get("rows"):
-                rows = [[_cell(v) for v in r] for r in box["rows"]]
+
+                rows = [
+                    [_cell(v) for v in r]
+                    for r in box["rows"]
+                ]
+
                 t = Table(rows, hAlign="LEFT")
-                t.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E7ECEA")),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D5DDDA")),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ]))
+
+                t.setStyle(
+                    TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, 0),
+                         colors.HexColor("#E7ECEA")),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                        ("GRID", (0, 0), (-1, -1), 0.4,
+                         colors.HexColor("#D5DDDA")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 3),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ])
+                )
+
                 story.append(t)
+
             elif box["kind"] == "note" and box.get("text"):
-                story.append(Paragraph(_esc(box["text"]), body))
+
+                story.append(
+                    Paragraph(_esc(box["text"]), body)
+                )
+
             story.append(Spacer(1, 10))
+
         story.append(Spacer(1, 14))
 
     doc.build(story)
+
     return buf.getvalue()
 
 
@@ -116,17 +225,46 @@ def build_pptx(name, sections):
                 continue
 
             if box["kind"] == "value":
-                vb = slide.shapes.add_textbox(Inches(0.5), Inches(y), Inches(5.8), Inches(1.3))
-                tf = vb.text_frame
+
+                card = slide.shapes.add_shape(
+                    MSO_SHAPE.ROUNDED_RECTANGLE,
+                    Inches(0.5),
+                    Inches(y),
+                    Inches(5.8),
+                    Inches(1.5),
+                )
+
+                # Card background
+                card.fill.solid()
+                card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+
+                # Card border
+                card.line.color.rgb = RGBColor(213, 221, 218)
+
+                tf = card.text_frame
+                tf.clear()
                 tf.word_wrap = True
-                tf.paragraphs[0].text = box["title"] or ""
-                tf.paragraphs[0].font.size = Pt(12)
-                tf.paragraphs[0].font.color.rgb = RGBColor(0x5A, 0x66, 0x63)
+
+                # Title
+                p1 = tf.paragraphs[0]
+                p1.text = box["title"] or ""
+                p1.font.size = Pt(12)
+                p1.font.color.rgb = RGBColor(0x5A, 0x66, 0x63)
+
+                # Main value
                 p2 = tf.add_paragraph()
                 p2.text = box.get("text", "—")
                 p2.font.size = Pt(30)
                 p2.font.bold = True
-                y += 1.4
+
+                # Optional note
+                if box.get("note"):
+                    p3 = tf.add_paragraph()
+                    p3.text = box["note"]
+                    p3.font.size = Pt(8)
+                    p3.font.color.rgb = RGBColor(120, 120, 120)
+
+                y += 1.7
 
             elif box["kind"] in ("chart", "table") and box.get("rows"):
                 rows = box["rows"][:13]  # keep one slide readable
@@ -210,4 +348,322 @@ def build_xlsx(name, sections):
 
     buf = io.BytesIO()
     wb.save(buf)
+    return buf.getvalue()
+
+# --------------------------------------------------------------------------
+# CSV / TABLE
+# --------------------------------------------------------------------------
+def build_csv(name, sections):
+    import csv
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    writer.writerow([name])
+
+    for sec in sections:
+        writer.writerow([])
+        writer.writerow([sec["name"]])
+
+        if sec.get("desc"):
+            writer.writerow([sec["desc"]])
+
+        for box in sec["boxes"]:
+            writer.writerow([])
+            writer.writerow([box["title"] or "Untitled"])
+
+            if box.get("error"):
+                writer.writerow(["Error", box["error"]])
+
+            elif box["kind"] == "value":
+                writer.writerow(["Value", box.get("text", "—")])
+
+                if box.get("note"):
+                    writer.writerow(["Note", box["note"]])
+
+            elif box["kind"] in ("chart", "table") and box.get("rows"):
+                for row in box["rows"]:
+                    writer.writerow([
+                        "—" if value is None else value
+                        for value in row
+                    ])
+
+            elif box.get("text"):
+                writer.writerow([box["text"]])
+
+    return buf.getvalue().encode("utf-8")
+# --------------------------------------------------------------------------
+# TABLE PDF
+# --------------------------------------------------------------------------
+def build_table_pdf(name, sections):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+        PageBreak,
+    )
+
+    buf = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        topMargin=36,
+        bottomMargin=36,
+        leftMargin=36,
+        rightMargin=36,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "TableReportTitle",
+        parent=styles["Title"],
+        fontSize=20,
+        spaceAfter=20,
+    )
+
+    section_style = ParagraphStyle(
+        "TableSection",
+        parent=styles["Heading2"],
+        fontSize=14,
+        spaceBefore=14,
+        spaceAfter=8,
+    )
+
+    header_style = ParagraphStyle(
+        "TableHeader",
+        parent=styles["BodyText"],
+        fontSize=9,
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    )
+
+    cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["BodyText"],
+        fontSize=9,
+        leading=12,
+    )
+
+    story = [
+        Paragraph(_esc(name), title_style),
+    ]
+
+    for sec in sections:
+
+        # Section heading
+        story.append(
+            Paragraph(
+                _esc(sec.get("name", "Untitled Section")),
+                section_style,
+            )
+        )
+
+        if sec.get("desc"):
+            story.append(
+                Paragraph(
+                    _esc(sec["desc"]),
+                    cell_style,
+                )
+            )
+            story.append(Spacer(1, 8))
+
+        # Main table header
+        table_data = [
+            [
+                Paragraph("Metric", header_style),
+                Paragraph("Value", header_style),
+                Paragraph("Note / Details", header_style),
+            ]
+        ]
+
+        for box in sec.get("boxes", []):
+
+            # Error boxes
+            if box.get("error"):
+                table_data.append([
+                    Paragraph(_esc(box.get("title") or "Error"), cell_style),
+                    Paragraph("Error", cell_style),
+                    Paragraph(_esc(box["error"]), cell_style),
+                ])
+
+            # Value / KPI boxes
+            elif box.get("kind") == "value":
+                table_data.append([
+                    Paragraph(
+                        _esc(box.get("title") or "Untitled"),
+                        cell_style,
+                    ),
+                    Paragraph(
+                        _esc(box.get("text", "—")),
+                        cell_style,
+                    ),
+                    Paragraph(
+                        _esc(box.get("note", "")),
+                        cell_style,
+                    ),
+                ])
+
+            # Chart or table boxes
+            elif (
+                box.get("kind") in ("chart", "table")
+                and box.get("rows")
+            ):
+                rows = box["rows"]
+
+                # Add the box title
+                table_data.append([
+                    Paragraph(
+                        f"<b>{_esc(box.get('title') or 'Table')}</b>",
+                        cell_style,
+                    ),
+                    "",
+                    "",
+                ])
+
+                # Add every row from the chart/table
+                for row in rows:
+                    row_values = [
+                        "—" if value is None else str(value)
+                        for value in row
+                    ]
+
+                    if len(row_values) == 1:
+                        table_data.append([
+                            Paragraph(_esc(row_values[0]), cell_style),
+                            "",
+                            "",
+                        ])
+
+                    elif len(row_values) == 2:
+                        table_data.append([
+                            Paragraph(_esc(row_values[0]), cell_style),
+                            Paragraph(_esc(row_values[1]), cell_style),
+                            "",
+                        ])
+
+                    else:
+                        table_data.append([
+                            Paragraph(_esc(row_values[0]), cell_style),
+                            Paragraph(_esc(row_values[1]), cell_style),
+                            Paragraph(
+                                _esc(" | ".join(row_values[2:])),
+                                cell_style,
+                            ),
+                        ])
+
+            # Notes
+            elif box.get("text"):
+                table_data.append([
+                    Paragraph(
+                        _esc(box.get("title") or "Details"),
+                        cell_style,
+                    ),
+                    Paragraph(
+                        _esc(box.get("text", "")),
+                        cell_style,
+                    ),
+                    "",
+                ])
+
+        # Create section table
+        if len(table_data) > 1:
+            table = Table(
+                table_data,
+                colWidths=[
+                    3.2 * inch,
+                    2.0 * inch,
+                    4.0 * inch,
+                ],
+                repeatRows=1,
+                hAlign="LEFT",
+            )
+
+            table.setStyle(TableStyle([
+                # Header
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#0D6E62"),
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.white,
+                ),
+
+                # Grid
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.HexColor("#D5DDDA"),
+                ),
+
+                # Alternating rows
+                (
+                    "BACKGROUND",
+                    (0, 1),
+                    (-1, -1),
+                    colors.white,
+                ),
+
+                # Alignment
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "MIDDLE",
+                ),
+
+                # Padding
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    8,
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    10,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    10,
+                ),
+
+                # Value column centered
+                (
+                    "ALIGN",
+                    (1, 1),
+                    (1, -1),
+                    "CENTER",
+                ),
+            ]))
+
+            story.append(table)
+            story.append(Spacer(1, 16))
+
+    doc.build(story)
+
     return buf.getvalue()
