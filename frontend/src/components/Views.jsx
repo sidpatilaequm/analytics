@@ -86,23 +86,7 @@ export function Reports({ onOpen, onNew, reload }) {
       dispatch({ type: "error", error: e.message });
     }
   };
-  const openPublished = async (r) => {
-  try {
-    const full = await api.process(r.process_key);
-
-    if (!full.published?.links?.length) {
-      throw new Error("This dashboard is not published yet.");
-    }
-
-    const link =
-      full.published.links.find((x) => x.role === "employee") ||
-      full.published.links[0];
-
-    window.open(link.url, "_blank");
-  } catch (e) {
-    dispatch({ type: "error", error: e.message });
-  }
-};
+  
   return (
     <section className="hcard" id="vReports">
       <header>
@@ -195,14 +179,7 @@ export function Reports({ onOpen, onNew, reload }) {
                 >
                   Edit
                 </button>
-
-                <button
-                  className="sbtn"
-                  onClick={() => onOpen(r.process_key, "preview")}
-                  title="See exactly what a viewer would see — no editing controls"
-                >
-                  Preview
-                </button>
+                
 
                 <button
                   className="sbtn"
