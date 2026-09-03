@@ -6,6 +6,7 @@ fixable) in exactly one place, not three.
 
 import io
 import re
+from pptx.enum.shapes import MSO_SHAPE
 
 
 # --------------------------------------------------------------------------

@@ -29,6 +29,7 @@ function Editable({ value, onChange, className, placeholder, style }) {
 
 export default function Canvas() {
   const { state, dispatch } = useStore();
+  const design = state.mode === "design";
   return (
     <div className="sheet" onMouseDown={() => dispatch({ type: "select", sel: null })}>
       <ReportName />
@@ -36,11 +37,13 @@ export default function Canvas() {
       {state.doc.sections.map((sc, i) => (
         <Section key={sc.id} section={sc} index={i + 1} />
       ))}
-      <div className="addbar">
-        <button className="add big" onClick={() => dispatch({ type: "addSection" })}>
-          + Section
-        </button>
-      </div>
+      {design && (
+        <div className="addbar">
+          <button className="add big" onClick={() => dispatch({ type: "addSection" })}>
+            + Section
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,20 +104,26 @@ function ReportName() {
 /* ---------------- filters ---------------- */
 function FilterBar() {
   const { state, dispatch } = useStore();
+  const design = state.mode === "design";
+  if (!design && !state.doc.filters.length) return null;
   return (
     <div className="fbar">
-      {!state.doc.filters.length && (
+      {!state.doc.filters.length && design && (
         <div className="hint" style={{ margin: "4px 8px 0" }}>
           No filters yet — add one and name it in place.
         </div>
       )}
       {state.doc.filters.map((f, i) => <Filter key={f.id} filter={f} index={i} />)}
-      <div className="fbar-add">
-        <button className="add" onClick={() => dispatch({ type: "addFilter" })}>+ Filter</button>
-        {Object.keys(state.filterState).length > 0 && (
-          <button className="add" onClick={() => dispatch({ type: "clearFilters" })}>Clear</button>
-        )}
-      </div>
+      {(design || Object.keys(state.filterState).length > 0) && (
+        <div className="fbar-add">
+          {design && (
+            <button className="add" onClick={() => dispatch({ type: "addFilter" })}>+ Filter</button>
+          )}
+          {Object.keys(state.filterState).length > 0 && (
+            <button className="add" onClick={() => dispatch({ type: "clearFilters" })}>Clear</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

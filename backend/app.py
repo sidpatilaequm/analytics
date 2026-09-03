@@ -494,30 +494,29 @@ def write_box(key):
 # exporting — PDF / PPTX / XLSX, all built from the same computed results
 # --------------------------------------------------------------------------
 EXPORT_KINDS = {
-    "pdf": (
-        "application/pdf",
-        exporters.build_pdf,
-        "pdf",
-    ),
-
-    "pptx": (
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        exporters.build_pptx,
-        "pptx",
-    ),
-
-    "xlsx": (
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        exporters.build_xlsx,
-        "xlsx",
-    ),
-
-    "table": (
-        "application/pdf",
-        exporters.build_table_pdf,
-        "pdf",
-    ),
+    "pdf": ("application/pdf", exporters.build_pdf, "pdf"),
+    "pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",
+             exporters.build_pptx, "pptx"),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             exporters.build_xlsx, "xlsx"),
+    "table": ("application/pdf", exporters.build_table_pdf, "pdf"),
 }
+
+
+def _export_bytes(definition, filters, conn_row, fmt):
+    """Shared by the authenticated editor's export and the public, role-scoped
+    one — same rules as _execute_boxes, so the two can't drift apart.
+    Returns (bytes, mime type, filename stem, real file extension) — 'table'
+    is a PDF too, just a different layout, so its extension is 'pdf', not
+    'table'."""
+    cat = _catalogue(conn_row)
+    results = _execute_boxes(definition, filters, conn_row, cat, allow_forms=False)
+    sections = _render_boxes(definition, results)
+    name = definition.get("name") or "report"
+    mime, builder, ext = EXPORT_KINDS[fmt]
+    data = builder(name, sections)
+    safe = re.sub(r"[^\w-]+", "-", name).strip("-").lower() or "report"
+    return data, mime, safe, ext
 
 
 @app.get("/api/processes/<key>/export/<fmt>")
@@ -534,24 +533,16 @@ def export_report(key, fmt):
     if not conn_row:
         return jsonify(error="no data connection configured"), 400
     try:
-        cat = _catalogue(conn_row)
-    except Exception as exc:  # noqa: BLE001
-        return jsonify(error=f"could not read the catalogue: {exc}"), 502
-
-    try:
         filters = json.loads(request.args.get("filters") or "{}")
     except ValueError:
         filters = {}
-    results = _execute_boxes(definition, filters, conn_row, cat, allow_forms=False)
-    sections = _render_boxes(definition, results)
-    name = definition.get("name") or "report"
-
-    mime, builder, extension = EXPORT_KINDS[fmt]
-    data = builder(name, sections)
-    safe = re.sub(r"[^\w-]+", "-", name).strip("-").lower() or "report"
+    try:
+        data, mime, safe, ext = _export_bytes(definition, filters, conn_row, fmt)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify(error=str(exc)[:300]), 502
 
     resp = app.response_class(data, mimetype=mime)
-    resp.headers["Content-Disposition"] = f'attachment; filename="{safe}.{extension}"'
+    resp.headers["Content-Disposition"] = f'attachment; filename="{safe}.{ext}"'
     return resp
 
 @app.get("/api/processes/<key>/table")
@@ -789,6 +780,84 @@ def execute_public(key, token):
     results = _execute_boxes(definition, state, conn_row, cat, allow_forms=False)
     return jsonify(results=results)
 
+@app.get("/api/r/<key>/<token>/export/<fmt>")
+def export_public_report(key, token, fmt):
+    if fmt not in ("pdf", "pptx"):
+        return jsonify(error="unknown export format"), 400
+
+    pub = _resolve_pub(key, token)
+    if not pub:
+        return jsonify(error="this link is not live"), 404
+
+    ver = db.q1(
+        "SELECT definition FROM process_versions "
+        "WHERE process_id=%s AND version=%s",
+        (pub["process_id"], pub["pinned_version"])
+    )
+
+    if not ver:
+        return jsonify(error="published version not found"), 404
+
+    definition = (
+        ver["definition"]
+        if isinstance(ver["definition"], dict)
+        else json.loads(ver["definition"])
+    )
+
+    # Apply the same role-based visibility as the published page
+    definition = _definition_for_role(definition, pub["role"])
+
+    conn_row = _connection_for(cid=pub["connection_id"])
+    if not conn_row:
+        return jsonify(error="no data connection configured"), 400
+
+    try:
+        cat = _catalogue(conn_row)
+    except Exception as exc:
+        return jsonify(error=f"could not read the catalogue: {exc}"), 502
+
+    try:
+        filters = json.loads(request.args.get("filters") or "{}")
+    except ValueError:
+        filters = {}
+
+    results = _execute_boxes(
+        definition,
+        filters,
+        conn_row,
+        cat,
+        allow_forms=False,
+    )
+
+    sections = _render_boxes(definition, results)
+    name = definition.get("name") or "report"
+
+    if fmt == "pdf":
+        mime = "application/pdf"
+        builder = exporters.build_pdf
+        extension = "pdf"
+    else:
+        mime = (
+            "application/vnd.openxmlformats-officedocument."
+            "presentationml.presentation"
+        )
+        builder = exporters.build_pptx
+        extension = "pptx"
+
+    data = builder(name, sections)
+
+    safe = re.sub(
+        r"[^\w-]+",
+        "-",
+        name
+    ).strip("-").lower() or "report"
+
+    resp = app.response_class(data, mimetype=mime)
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="{safe}.{extension}"'
+    )
+
+    return resp
 
 @app.get("/api/health")
 def health():

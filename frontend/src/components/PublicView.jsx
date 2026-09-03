@@ -24,6 +24,19 @@ function PublicShell({ slug }) {
   const [role, setRole] = React.useState(null);
   const [loaded, setLoaded] = React.useState(false);
   const [loadErr, setLoadErr] = React.useState(null);
+  const [exporting, setExporting] = React.useState(null);
+
+  const exportAs = async (fmt) => {
+    setExporting(fmt);
+    try {
+      const safe = (state.doc.name || "report").replace(/[^\w-]+/g, "-").toLowerCase();
+      await api.publicExport(slug, fmt, state.filterState, `${safe}.${fmt}`);
+    } catch (e) {
+      dispatch({ type: "error", error: e.message });
+    } finally {
+      setExporting(null);
+    }
+  };
 
   React.useEffect(() => {
     let alive = true;
@@ -78,8 +91,15 @@ function PublicShell({ slug }) {
 
   return (
     <div className="pane">
-      <div className="pubviewtag">
-        Shared {role ? `${role} ` : ""}view — read-only
+            <div className="pagebar">
+        <span className="pubviewtag">Shared {role ? `${role} ` : ""}view — read-only</span>
+        <span className="espacer" />
+        <button className="pb" disabled={exporting === "pdf"} onClick={() => exportAs("pdf")}>
+          {exporting === "pdf" ? "Preparing…" : "Download PDF"}
+        </button>
+        <button className="pb" disabled={exporting === "pptx"} onClick={() => exportAs("pptx")}>
+          {exporting === "pptx" ? "Preparing…" : "PPT"}
+        </button>
       </div>
       {state.error && <div className="fx bad" style={{ marginBottom: 14 }}>{state.error}</div>}
       <Canvas />

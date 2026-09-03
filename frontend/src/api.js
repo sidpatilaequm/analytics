@@ -1,6 +1,7 @@
 /* One place that talks to the middleware. Everything else imports this. */
 const BASE =
   (import.meta.env.BASE_URL || "/").replace(/\/$/, "") + "/api";
+
 let token = localStorage.getItem("token") || "";
 
 export const setToken = (t) => {
@@ -119,6 +120,10 @@ const api = {
 
   exportReport: (key, fmt, filters, filename) =>
     download(`/processes/${key}/export/${fmt}?filters=${encodeURIComponent(JSON.stringify(filters || {}))}`,
+      filename),
+
+  publicExport: (slug, fmt, filters, filename) =>
+    download(`/r/${slug}/export/${fmt}?filters=${encodeURIComponent(JSON.stringify(filters || {}))}`,
       filename),
 };
 export default api;

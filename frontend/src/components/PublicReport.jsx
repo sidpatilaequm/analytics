@@ -60,6 +60,8 @@ export default function PublicReport() {
   );
 }
 
+// frontend/src/components/PublicReport.jsx
+
 function PublicReportInner({ slug }) {
   const { state, dispatch } = useStore();
 
@@ -100,18 +102,12 @@ function PublicReportInner({ slug }) {
             });
           }
         } catch (executeError) {
-          if (!cancelled) {
-            setError(executeError.message);
-          }
+          if (!cancelled) setError(executeError.message);
         }
       } catch (e) {
-        if (!cancelled) {
-          setError(e.message);
-        }
+        if (!cancelled) setError(e.message);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -126,9 +122,7 @@ function PublicReportInner({ slug }) {
     return (
       <div className="pane">
         <div className="hcard">
-          <div style={{ padding: 30 }}>
-            Loading dashboard...
-          </div>
+          <div style={{ padding: 30 }}>Loading dashboard...</div>
         </div>
       </div>
     );
@@ -149,6 +143,32 @@ function PublicReportInner({ slug }) {
 
   return (
     <div className="pane public-report">
+
+      {/* ONLY download options for employees */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 10,
+          marginBottom: 16,
+        }}
+      >
+        <a
+          className="pb go"
+          href={`${API_BASE}/r/${slug}/export/pdf`}
+        >
+          Download PDF
+        </a>
+
+        <a
+          className="pb"
+          href={`${API_BASE}/r/${slug}/export/pptx`}
+        >
+          Download PPT
+        </a>
+      </div>
+
+      {/* Published report - read only */}
       <PublicCanvas doc={state.doc} />
     </div>
   );

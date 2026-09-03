@@ -79,11 +79,9 @@ function fullPublicUrl(bareUrl) {
 }
 
 export default function App() {
-  const path = pathRelativeToBase();
+  const pathname = window.location.pathname;
 
-  const [signedIn, setSignedIn] = React.useState(false);
-
-  if (path.startsWith("/r/")) {
+  if (pathname.includes("/r/")) {
     return <PublicReport />;
   }
 
@@ -246,12 +244,15 @@ function Shell() {
 
   const editing = state.view === "editor";
 
+    const EXPORT_EXT = { pdf: "pdf", pptx: "pptx", xlsx: "xlsx", table: "pdf" };
   const exportAs = async (fmt) => {
     if (!state.processKey) return;
     setExporting(fmt);
     try {
       const safe = (state.doc.name || "report").replace(/[^\w-]+/g, "-").toLowerCase();
-      await api.exportReport(state.processKey, fmt, state.filterState, `${safe}.${fmt}`);
+      const suffix = fmt === "table" ? "-table" : "";
+      await api.exportReport(state.processKey, fmt, state.filterState,
+        `${safe}${suffix}.${EXPORT_EXT[fmt]}`);
     } catch (e) {
       dispatch({ type: "error", error: e.message });
     } finally {
@@ -292,6 +293,10 @@ function Shell() {
           <button className="pb" disabled={exporting === "xlsx"} onClick={() => exportAs("xlsx")}>
             {exporting === "xlsx" ? "Preparing…" : "Excel"}
           </button>
+          <button className="pb" disabled={exporting === "table"} onClick={() => exportAs("table")}>
+            {exporting === "table" ? "Preparing…" : "Table"}
+          </button>
+          
           <span className="pbsep" />
           <details className="roledrop">
             <summary className="pb">Publish to &#9662;</summary>
@@ -327,6 +332,7 @@ function Shell() {
             <button className="pb" aria-pressed={state.view === "settings"}
               onClick={() => dispatch({ type: "view", view: "settings" })}>System Settings</button>
           </>
+            
         )}
         <span className="espacer" />
         <span className="sstate">{state.busy ? "running…" : saveMsg}</span>
