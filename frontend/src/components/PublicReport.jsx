@@ -1,8 +1,8 @@
 import React from "react";
 import { StoreProvider, useStore } from "../store.jsx";
 import Box from "./Box.jsx";
-import { normS, styleObj, frameStyle } from "../model.js";
-
+import { normS, styleObj, frameStyle, fmtCell, fmtNumber } from "../model.js";
+import Chart from "../charts/Chart.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
@@ -391,7 +391,7 @@ function PublicBoxBody({ box }) {
   }
 
   if (box.kind === "chart") {
-    const Chart = require("../charts/Chart.jsx").default;
+    
 
     const data = result?.data || [];
 
@@ -444,36 +444,19 @@ function PublicBoxBody({ box }) {
       </thead>
 
       <tbody>
-        {rows
-          .slice(0, box.table?.limit || 10)
-          .map((row, i) => (
-            <tr
-              key={i}
-              className={
-                box.table?.zebra && i % 2
-                  ? "z"
-                  : undefined
-              }
-            >
-              {columns.map((col) => {
-                const key = col.col.replace(/\./g, "__");
-
-                return (
-                  <td
-                    key={col.col}
-                    className={
-                      col.align === "right"
-                        ? "num"
-                        : undefined
-                    }
-                  >
-                    {row[key] ?? ""}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-      </tbody>
+  {rows.map((row, rowIndex) => (
+    <tr key={rowIndex}>
+      {columns.map((col) => (
+        <td
+          key={col.col}
+          className={col.align === "right" ? "num" : undefined}
+        >
+          {fmtCell(row[col.col], col.fmt)}
+        </td>
+      ))}
+    </tr>
+  ))}
+</tbody>
     </table>
   );
 }
