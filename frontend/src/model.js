@@ -25,8 +25,15 @@ export const JOIN_TYPES = [["INNER", "INNER JOIN"], ["LEFT", "LEFT JOIN"]];
 export const OPS = [["=", "="], ["<>", "≠"], [">", ">"], [">=", "≥"], ["<", "<"], ["<=", "≤"],
   ["contains", "contains"], ["starts", "starts with"], ["in", "in list"],
   ["blank", "is blank"], ["notblank", "is not blank"]];
-export const CHARTS = [["bar", "Bar"], ["hbar", "Bars →"], ["line", "Line"],
-  ["area", "Area"], ["pie", "Pie"], ["donut", "Donut"]];
+export const CHARTS = [
+  ["bar", "Bar"],
+  ["hbar", "Bars →"],
+  ["stacked", "Single Stacked Bar"],
+  ["line", "Line"],
+  ["area", "Area"],
+  ["pie", "Pie"],
+  ["donut", "Donut"],
+];
 export const CONTROLS = [["text", "Text box"], ["date", "Date"], ["daterange", "Date range"],
   ["select", "Dropdown"], ["radio", "Option buttons"], ["checkbox", "Check boxes"],
   ["toggle", "Yes / No"], ["number", "Number"]];
