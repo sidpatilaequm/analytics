@@ -860,11 +860,57 @@ def export_public_report(key, token, fmt):
         mime = "application/pdf"
         extension = "pdf"
 
-        public_url = (
-            os.environ.get("PUBLIC_BASE_URL", "http://localhost:5173")
-            .rstrip("/")
-            + f"/analytics/r/{key}/{token}"
+        scheme = request.headers.get(
+            "X-Forwarded-Proto",
+            request.scheme
         )
+
+        host = request.headers.get(
+            "Host",
+            request.host
+        )
+
+        # Keep the same deployment prefix as the incoming API request.
+        #
+        # Local:
+        #   API      = http://localhost:5001/api/...
+        #   Frontend = http://localhost:5173/
+        #
+        # Production:
+        #   API      = https://nexdsupportal.in/analytics/api/...
+        #   Frontend = https://nexdsupportal.in/analytics/
+
+        api_marker = "/api/"
+        request_path = request.path
+
+        if api_marker in request_path:
+            base_path = request_path.split(
+                api_marker,
+                1
+            )[0]
+        else:
+            base_path = ""
+
+        # Local development:
+        # Playwright must open the Vite frontend, not Flask.
+        if (
+            host.startswith("localhost:5001")
+            or host.startswith("127.0.0.1:5001")
+        ):
+            public_url = (
+                "http://localhost:5173"
+                + f"{base_path}/r/{key}/{token}"
+            )
+
+        # Production:
+        # nginx serves the frontend at /analytics/.
+        else:
+            public_url = (
+                f"{scheme}://{host}"
+                + f"{base_path}/r/{key}/{token}"
+            )
+
+        print("PDF PUBLIC URL:", public_url)
 
         data = exporters.build_browser_pdf(public_url)
 
@@ -875,7 +921,10 @@ def export_public_report(key, token, fmt):
         )
         extension = "pptx"
 
-        data = exporters.build_pptx(name, sections)
+        data = exporters.build_pptx(
+            name,
+            sections
+        )
 
     safe = re.sub(
         r"[^\w-]+",
@@ -883,17 +932,28 @@ def export_public_report(key, token, fmt):
         name
     ).strip("-").lower() or "report"
 
-    resp = app.response_class(data, mimetype=mime)
+    resp = app.response_class(
+        data,
+        mimetype=mime
+    )
+
     resp.headers["Content-Disposition"] = (
         f'attachment; filename="{safe}.{extension}"'
     )
 
     return resp
 
+
 @app.get("/api/health")
 def health():
-    return jsonify(ok=True, service="nexd-designer")
+    return jsonify(
+        ok=True,
+        service="nexd-designer"
+    )
 
 
 if __name__ == "__main__":
-    app.run(port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(
+        port=int(os.environ.get("PORT", 5000)),
+        debug=True
+    )
