@@ -391,6 +391,8 @@ function PublicBoxBody({ box }) {
   }
 
   if (box.kind === "chart") {
+    
+
     const data = result?.data || [];
 
     if (!data.length) {
@@ -442,29 +444,19 @@ function PublicBoxBody({ box }) {
       </thead>
 
       <tbody>
-        {rows.map((row, rowIndex) => (
-          <tr key={rowIndex}>
-            {columns.map((col) => {
-              const value =
-                row[col.col] ??
-                row[col.col.replace(/\./g, "__")];
-
-              return (
-                <td
-                  key={col.col}
-                  className={
-                    col.align === "right"
-                      ? "num"
-                      : undefined
-                  }
-                >
-                  {fmtCell(value, col.fmt)}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
+  {rows.map((row, rowIndex) => (
+    <tr key={rowIndex}>
+      {columns.map((col) => (
+        <td
+          key={col.col}
+          className={col.align === "right" ? "num" : undefined}
+        >
+          {fmtCell(row[col.col], col.fmt)}
+        </td>
+      ))}
+    </tr>
+  ))}
+</tbody>
     </table>
   );
 }
