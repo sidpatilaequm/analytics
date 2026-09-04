@@ -13,20 +13,51 @@ import {
   Group, Hint, Row, RoleChips, Select, Switch, Text, TextArea, Toggles,
 } from "./Panels.jsx";
 
-function Editable({ value, onChange, className, placeholder, style }) {
+function Editable({
+  value,
+  onChange,
+  className,
+  placeholder,
+  style,
+  editable = true,
+}) {
   const ref = React.useRef(null);
+
   React.useEffect(() => {
-    if (ref.current && ref.current.textContent !== (value || ""))
+    if (
+      ref.current &&
+      ref.current.textContent !== (value || "")
+    ) {
       ref.current.textContent = value || "";
+    }
   }, [value]);
+
   return (
-    <div ref={ref} className={className} style={style} contentEditable
-      suppressContentEditableWarning data-ph={placeholder}
-      onBlur={(e) => onChange(e.currentTarget.textContent)}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} />
+    <div
+      ref={ref}
+      className={className}
+      style={style}
+      contentEditable={editable}
+      suppressContentEditableWarning
+      data-ph={editable ? placeholder : undefined}
+      onBlur={
+        editable
+          ? (e) => onChange(e.currentTarget.textContent)
+          : undefined
+      }
+      onKeyDown={
+        editable
+          ? (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }
+          : undefined
+      }
+    />
   );
 }
-
 export default function Canvas() {
   const { state, dispatch } = useStore();
   const design = state.mode === "design";

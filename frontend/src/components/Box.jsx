@@ -15,22 +15,48 @@ import {
   Group, Hint, Row, RoleChips, SegBar, Select, SourceEditor, Switch, Text, TextArea, Toggles,
 } from "./Panels.jsx";
 /* An editable line that writes on blur, so typing never re-renders the tree. */
-function Editable({ value, onChange, className, placeholder, style }) {
+function Editable({
+  value,
+  onChange,
+  className,
+  placeholder,
+  style,
+  editable = true,
+}) {
   const ref = React.useRef(null);
+
   React.useEffect(() => {
-    if (ref.current && ref.current.textContent !== (value || ""))
+    if (
+      ref.current &&
+      ref.current.textContent !== (value || "")
+    ) {
       ref.current.textContent = value || "";
+    }
   }, [value]);
+
   return (
     <div
       ref={ref}
       className={className}
       style={style}
-      contentEditable
+      contentEditable={editable}
       suppressContentEditableWarning
-      data-ph={placeholder}
-      onBlur={(e) => onChange(e.currentTarget.textContent)}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+      data-ph={editable ? placeholder : undefined}
+      onBlur={
+        editable
+          ? (e) => onChange(e.currentTarget.textContent)
+          : undefined
+      }
+      onKeyDown={
+        editable
+          ? (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }
+          : undefined
+      }
     />
   );
 }
@@ -796,286 +822,232 @@ function ChartFormat({ box, set }) {
 /* ---- table ---- */
 function TableData({ box, set }) {
   const { state, dispatch } = useStore();
+  const c = box.table || {};
 
-  const isManual = box.tableMode === "manual";
-  const c = box.table;
-  const m = box.manualTable;
+  // Get columns from the selected database source
+  const availableColumns = colOptions(state.catalog, box.src)
+    .map((x) => x.name);
 
-  const addRow = () => {
-    const nextRows = [
-      ...m.rows,
-      {
-        id: `row_${Date.now()}`,
-        cells: m.columns.map(() => ""),
-      },
-    ];
-
-    set("manualTable.rows", nextRows);
-  };
+  const columns = c.columns || [];
 
   const addColumn = () => {
-    const nextColumns = [
-      ...m.columns,
-      {
-        id: `col_${Date.now()}`,
-        label: `Column ${m.columns.length + 1}`,
-      },
-    ];
+    const nextColumn = {
+      col: "",
+      label: "",
+      on: true,
+      fmt: "auto",
+      align: "left",
+      width: "auto",
+    };
 
-    const nextRows = m.rows.map((row) => ({
-      ...row,
-      cells: [...row.cells, ""],
-    }));
-
-    set("manualTable.columns", nextColumns);
-    set("manualTable.rows", nextRows);
-  };
-
-  const removeRow = (index) => {
-    if (m.rows.length <= 1) return;
-    set(
-      "manualTable.rows",
-      m.rows.filter((_, i) => i !== index)
-    );
+    set("table.columns", [
+      ...columns,
+      nextColumn,
+    ]);
   };
 
   const removeColumn = (index) => {
-    if (m.columns.length <= 1) return;
-
     set(
-      "manualTable.columns",
-      m.columns.filter((_, i) => i !== index)
-    );
-
-    set(
-      "manualTable.rows",
-      m.rows.map((row) => ({
-        ...row,
-        cells: row.cells.filter((_, i) => i !== index),
-      }))
+      "table.columns",
+      columns.filter((_, i) => i !== index)
     );
   };
 
   return (
     <>
-      <Group>Table type</Group>
+      <Group>Rows</Group>
 
-      <Chips
-        value={box.tableMode || "data"}
-        onChange={(v) => set("tableMode", v)}
-        options={[
-          ["data", "Data Table"],
-          ["manual", "Manual Table"],
-        ]}
-      />
+      <Row>
+        <Field label="Rows">
+          <Select
+            value={c.limit || 10}
+            numeric
+            options={[5, 8, 10, 15, 25, 50]}
+            onChange={(v) => set("table.limit", v)}
+          />
+        </Field>
 
-      {isManual ? (
-        <>
-          <Group>Manual table</Group>
+        <Field label="Sort by">
+          <Select
+            value={c.sort || ""}
+            options={[
+              ["", "None"],
+              ...columns.map((x) => [
+                x.col,
+                x.label || x.col || "Untitled",
+              ]),
+            ]}
+            onChange={(v) => set("table.sort", v)}
+          />
+        </Field>
 
-          <Hint>
-            Add columns and rows here. Click headings and cells directly
-            inside the table to type your content.
-          </Hint>
+        <Field label="Order">
+          <Select
+            value={c.dir || "asc"}
+            options={[
+              ["asc", "A → Z"],
+              ["desc", "Z → A"],
+            ]}
+            onChange={(v) => set("table.dir", v)}
+          />
+        </Field>
+      </Row>
 
-          <div className="collist">
-            {m.columns.map((col, i) => (
-              <div className="colrow" key={col.id}>
-                <span>
-                  <Text
-                    value={col.label}
-                    placeholder={`Column ${i + 1}`}
-                    onChange={(v) =>
-                      set(`manualTable.columns.${i}.label`, v)
-                    }
-                  />
-                </span>
+      <Group>Columns</Group>
 
-                <button
-                  type="button"
-                  className="xbtn warn"
-                  title="Remove column"
-                  onClick={() => removeColumn(i)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
+      <div className="collist">
+        {columns.map((col, i) => (
+          <div className="colrow" key={`${col.col}-${i}`}>
 
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="pb"
-              onClick={addColumn}
-            >
-              + Add Column
-            </button>
-          </div>
+            <span className="colmv">
+              <button
+                className="xbtn"
+                title="Move up"
+                disabled={i === 0}
+                onClick={() =>
+                  dispatch({
+                    type: "moveColumn",
+                    id: box.id,
+                    index: i,
+                    d: -1,
+                  })
+                }
+              >
+                ↑
+              </button>
 
-          <Group>Rows</Group>
+              <button
+                className="xbtn"
+                title="Move down"
+                disabled={i === columns.length - 1}
+                onClick={() =>
+                  dispatch({
+                    type: "moveColumn",
+                    id: box.id,
+                    index: i,
+                    d: 1,
+                  })
+                }
+              >
+                ↓
+              </button>
+            </span>
 
-          <div className="collist">
-            {m.rows.map((row, i) => (
-              <div className="colrow" key={row.id}>
-                <span>
-                  Row {i + 1}
-                </span>
+            <input
+              type="checkbox"
+              checked={col.on !== false}
+              onChange={(e) =>
+                set(
+                  `table.columns.${i}.on`,
+                  e.target.checked
+                )
+              }
+            />
 
-                <button
-                  type="button"
-                  className="xbtn warn"
-                  title="Remove row"
-                  onClick={() => removeRow(i)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="pb"
-              onClick={addRow}
-            >
-              + Add Row
-            </button>
-          </div>
-
-          <Hint>
-            The actual cell values can be typed directly into the table.
-          </Hint>
-        </>
-      ) : (
-        <>
-          <Group>Rows</Group>
-
-          <Row>
-            <Field label="Rows">
+            <Field label="Column">
               <Select
-                value={c.limit}
-                numeric
-                options={[5, 8, 10, 15, 25, 50]}
-                onChange={(v) => set("table.limit", v)}
-              />
-            </Field>
-
-            <Field label="Sort by">
-              <Select
-                value={c.sort}
-                options={["", ...c.columns.map((x) => x.col)]}
-                onChange={(v) => set("table.sort", v)}
-              />
-            </Field>
-
-            <Field label="Order">
-              <Select
-                value={c.dir}
+                value={col.col || ""}
                 options={[
-                  ["asc", "A → Z"],
-                  ["desc", "Z → A"],
+                  ["", "Blank column"],
+                  ...availableColumns,
                 ]}
-                onChange={(v) => set("table.dir", v)}
+                onChange={(v) => {
+                  set(`table.columns.${i}.col`, v);
+
+                  // Automatically use DB column name as label
+                  // only if user has not typed a custom label
+                  if (!col.label && v) {
+                    set(
+                      `table.columns.${i}.label`,
+                      v
+                    );
+                  }
+                }}
               />
             </Field>
-          </Row>
 
-          <Group>Columns — order, tick, rename, format</Group>
+            <Field label="Heading">
+              <Text
+                value={col.label || ""}
+                placeholder="Column heading"
+                onChange={(v) =>
+                  set(
+                    `table.columns.${i}.label`,
+                    v
+                  )
+                }
+              />
+            </Field>
 
-          <div className="collist">
-            {c.columns.map((col, i) => (
-              <div className="colrow" key={col.col}>
-                <span className="colmv">
-                  <button
-                    className="xbtn"
-                    title="Move up"
-                    onClick={() =>
-                      dispatch({
-                        type: "moveColumn",
-                        id: box.id,
-                        index: i,
-                        d: -1,
-                      })
-                    }
-                  >
-                    ↑
-                  </button>
+            <Field label="Format">
+              <Select
+                value={col.fmt || "auto"}
+                options={FMTS}
+                onChange={(v) =>
+                  set(
+                    `table.columns.${i}.fmt`,
+                    v
+                  )
+                }
+              />
+            </Field>
 
-                  <button
-                    className="xbtn"
-                    title="Move down"
-                    onClick={() =>
-                      dispatch({
-                        type: "moveColumn",
-                        id: box.id,
-                        index: i,
-                        d: 1,
-                      })
-                    }
-                  >
-                    ↓
-                  </button>
-                </span>
+            <Field label="Align">
+              <Select
+                value={col.align || "left"}
+                options={[
+                  ["left", "Left"],
+                  ["center", "Centre"],
+                  ["right", "Right"],
+                ]}
+                onChange={(v) =>
+                  set(
+                    `table.columns.${i}.align`,
+                    v
+                  )
+                }
+              />
+            </Field>
 
-                <input
-                  type="checkbox"
-                  checked={!!col.on}
-                  onChange={(e) =>
-                    set(`table.columns.${i}.on`, e.target.checked)
-                  }
-                />
+            <Field label="Width">
+              <Text
+                value={col.width || ""}
+                placeholder="auto"
+                onChange={(v) =>
+                  set(
+                    `table.columns.${i}.width`,
+                    v
+                  )
+                }
+              />
+            </Field>
 
-                <span>
-                  <Text
-                    value={col.label}
-                    onChange={(v) =>
-                      set(`table.columns.${i}.label`, v)
-                    }
-                  />
+            <button
+              className="xbtn"
+              title="Remove column"
+              onClick={() => removeColumn(i)}
+            >
+              ×
+            </button>
 
-                  <div className="cn">{col.col}</div>
-                </span>
-
-                <Select
-                  value={col.fmt}
-                  options={FMTS}
-                  onChange={(v) =>
-                    set(`table.columns.${i}.fmt`, v)
-                  }
-                />
-
-                <Select
-                  value={col.align}
-                  options={[
-                    ["left", "Left"],
-                    ["center", "Centre"],
-                    ["right", "Right"],
-                  ]}
-                  onChange={(v) =>
-                    set(`table.columns.${i}.align`, v)
-                  }
-                />
-
-                <Text
-                  value={col.width}
-                  placeholder="auto"
-                  onChange={(v) =>
-                    set(`table.columns.${i}.width`, v)
-                  }
-                />
-              </div>
-            ))}
           </div>
+        ))}
+      </div>
 
-          <Hint>
-            Headings are also editable straight in the rendered table.
-          </Hint>
+      <button
+        className="pb"
+        onClick={addColumn}
+        style={{ marginTop: 10 }}
+      >
+        + Add Column
+      </button>
 
-          <SourceEditor box={box} />
-        </>
-      )}
+      <Hint>
+        Add columns, connect them to database fields, rename their headings,
+        or leave a column blank.
+      </Hint>
+
+      <SourceEditor box={box} />
     </>
   );
 }

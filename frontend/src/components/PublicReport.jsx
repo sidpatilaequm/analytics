@@ -1,4 +1,4 @@
-import React from "react";
+
 import { StoreProvider, useStore } from "../store.jsx";
 import Box from "./Box.jsx";
 import { normS, styleObj, frameStyle, fmtCell, fmtNumber } from "../model.js";
@@ -412,6 +412,59 @@ function PublicBoxBody({ box }) {
     );
   }
 
+  // Manual Table: data is stored directly in the box definition,
+  // so it does not come from state.results.
+  if (box.tableMode === "manual") {
+    const manual = box.manualTable || {};
+    const columns = manual.columns || [];
+    const rows = manual.rows || [];
+
+    if (!columns.length) {
+      return (
+        <div className="empty">
+          No columns configured.
+        </div>
+      );
+    }
+
+    return (
+      <table className="rt">
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <th
+                key={col.id}
+                style={styleObj(normS(manual.headStyle))}
+              >
+                {col.label || "Column"}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr
+              key={row.id || rowIndex}
+              className={
+                manual.zebra && rowIndex % 2
+                  ? "z"
+                  : undefined
+              }
+            >
+              {columns.map((col, colIndex) => (
+                <td key={col.id}>
+                  {row.cells?.[colIndex] || ""}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  // Existing Data Table: keep the original query/result behavior.
   const columns = (box.table?.columns || []).filter(
     (x) => x.on
   );
@@ -444,23 +497,24 @@ function PublicBoxBody({ box }) {
       </thead>
 
       <tbody>
-  {rows.map((row, rowIndex) => (
-    <tr key={rowIndex}>
-      {columns.map((col) => (
-        <td
-          key={col.col}
-          className={col.align === "right" ? "num" : undefined}
-        >
-          {fmtCell(row[col.col], col.fmt)}
-        </td>
-      ))}
-    </tr>
-  ))}
-</tbody>
+        {rows.map((row, rowIndex) => (
+          <tr key={rowIndex}>
+            {columns.map((col) => (
+              <td
+                key={col.col}
+                className={
+                  col.align === "right" ? "num" : undefined
+                }
+              >
+                {fmtCell(row[col.col], col.fmt)}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
     </table>
   );
 }
-
 function formatNumber(value, decimals, locale) {
   const n = Number(value);
 
