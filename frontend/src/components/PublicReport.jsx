@@ -1,4 +1,4 @@
-
+import React from "react";
 import { StoreProvider, useStore } from "../store.jsx";
 import Box from "./Box.jsx";
 import { normS, styleObj, frameStyle, fmtCell, fmtNumber } from "../model.js";
