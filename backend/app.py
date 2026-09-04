@@ -860,55 +860,26 @@ def export_public_report(key, token, fmt):
         mime = "application/pdf"
         extension = "pdf"
 
-        scheme = request.headers.get(
-            "X-Forwarded-Proto",
-            request.scheme
-        )
-
-        host = request.headers.get(
-            "Host",
-            request.host
-        )
-
-        # Keep the same deployment prefix as the incoming API request.
+        # Frontend URL used by Playwright to render the published report.
         #
-        # Local:
-        #   API      = http://localhost:5001/api/...
-        #   Frontend = http://localhost:5173/
-        #
-        # Production:
-        #   API      = https://nexdsupportal.in/analytics/api/...
-        #   Frontend = https://nexdsupportal.in/analytics/
-
-        api_marker = "/api/"
-        request_path = request.path
-
-        if api_marker in request_path:
-            base_path = request_path.split(
-                api_marker,
-                1
-            )[0]
-        else:
-            base_path = ""
-
         # Local development:
-        # Playwright must open the Vite frontend, not Flask.
-        if (
-            host.startswith("localhost:5001")
-            or host.startswith("127.0.0.1:5001")
-        ):
-            public_url = (
-                "http://localhost:5173"
-                + f"{base_path}/r/{key}/{token}"
-            )
-
+        #   Frontend = http://localhost:5173
+        #
         # Production:
-        # nginx serves the frontend at /analytics/.
-        else:
-            public_url = (
-                f"{scheme}://{host}"
-                + f"{base_path}/r/{key}/{token}"
-            )
+        #   Frontend = https://nexdsupportal.in/analytics
+        #
+        # PUBLIC_BASE_URL should point to the FRONTEND, not the backend.
+        # This avoids relying on request.path because nginx strips
+        # /analytics before forwarding the request to Flask.
+
+        frontend_base_url = os.environ.get(
+            "PUBLIC_BASE_URL",
+            "http://localhost:5173"
+        ).rstrip("/")
+
+        public_url = (
+            f"{frontend_base_url}/r/{key}/{token}"
+        )
 
         print("PDF PUBLIC URL:", public_url)
 
