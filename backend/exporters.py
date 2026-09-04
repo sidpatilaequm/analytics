@@ -4,9 +4,67 @@ an XLSX. All three read the exact same normalized structure (see
 fixable) in exactly one place, not three.
 """
 
+import os
 import io
 import re
 from pptx.enum.shapes import MSO_SHAPE
+
+
+# --------------------------------------------------------------------------
+# BROWSER PDF
+# --------------------------------------------------------------------------
+def build_browser_pdf(url):
+    """
+    Generate a PDF from the actual published React report page.
+
+    This uses the browser-rendered page instead of rebuilding the report
+    with ReportLab, so the PDF matches the published UI.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+            ],
+        )
+
+        page = browser.new_page(
+            viewport={
+                "width": 1440,
+                "height": 900,
+            },
+            device_scale_factor=1,
+        )
+
+        page.goto(
+            url,
+            wait_until="networkidle",
+        )
+
+        # Make sure the actual report has rendered.
+        page.wait_for_selector(".sheet", timeout=30000)
+
+        # Give React/charts/fonts a moment to finish painting.
+        page.wait_for_timeout(1000)
+
+        pdf = page.pdf(
+            format="A4",
+            print_background=True,
+            prefer_css_page_size=True,
+            margin={
+                "top": "0",
+                "right": "0",
+                "bottom": "0",
+                "left": "0",
+            },
+        )
+
+        browser.close()
+
+        return pdf
 
 
 # --------------------------------------------------------------------------

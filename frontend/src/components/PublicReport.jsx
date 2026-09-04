@@ -146,27 +146,28 @@ function PublicReportInner({ slug }) {
 
       {/* ONLY download options for employees */}
       <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 10,
-          marginBottom: 16,
-        }}
-      >
-        <a
-          className="pb go"
-          href={`${API_BASE}/r/${slug}/export/pdf`}
-        >
-          Download PDF
-        </a>
+  className="export-actions"
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginBottom: 16,
+  }}
+>
+  <a
+    className="pb go"
+    href={`${API_BASE}/r/${slug}/export/pdf`}
+  >
+    Download PDF
+  </a>
 
-        <a
-          className="pb"
-          href={`${API_BASE}/r/${slug}/export/pptx`}
-        >
-          Download PPT
-        </a>
-      </div>
+  <a
+    className="pb"
+    href={`${API_BASE}/r/${slug}/export/pptx`}
+  >
+    Download PPT
+  </a>
+</div>
 
       {/* Published report - read only */}
       <PublicCanvas doc={state.doc} />

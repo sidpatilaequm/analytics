@@ -858,17 +858,24 @@ def export_public_report(key, token, fmt):
 
     if fmt == "pdf":
         mime = "application/pdf"
-        builder = exporters.build_pdf
         extension = "pdf"
+
+        public_url = (
+            os.environ.get("PUBLIC_BASE_URL", "http://localhost:5173")
+            .rstrip("/")
+            + f"/analytics/r/{key}/{token}"
+        )
+
+        data = exporters.build_browser_pdf(public_url)
+
     else:
         mime = (
             "application/vnd.openxmlformats-officedocument."
             "presentationml.presentation"
         )
-        builder = exporters.build_pptx
         extension = "pptx"
 
-    data = builder(name, sections)
+        data = exporters.build_pptx(name, sections)
 
     safe = re.sub(
         r"[^\w-]+",
