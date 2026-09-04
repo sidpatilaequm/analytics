@@ -397,7 +397,6 @@ def _render_boxes(definition, results):
             elif box.get("kind") == "note":
                 entry["text"] = re.sub("<[^<]+?>", "", (box.get("note") or {}).get("html", ""))
             boxes.append(entry)
-        if boxes:
             out.append({"name": sec.get("name") or "", "desc": sec.get("desc") or "",
                         "boxes": boxes})
     return out
@@ -626,15 +625,27 @@ def _visible(node, role):
 
 def _definition_for_role(definition, role):
     """Trim a definition down to what one role may see, on the server, before
-    it ever reaches a browser — so a public viewer can't retrieve a box's
-    data by editing the page, because that box was never sent to it."""
+    it ever reaches a browser — so a public viewer can never retrieve a box's
+    data by editing the page, because that box was never sent to it.
+    """
     out = dict(definition)
-    out["filters"] = [f for f in definition.get("filters", []) if _visible(f, role)]
+    out["filters"] = [
+        f for f in definition.get("filters", [])
+        if _visible(f, role)
+    ]
     out["sections"] = []
+
     for sec in definition.get("sections", []):
-        boxes = [b for b in sec.get("boxes", []) if _visible(b, role)]
-        if boxes:
-            out["sections"].append({**sec, "boxes": boxes})
+        boxes = [
+            b for b in sec.get("boxes", [])
+            if _visible(b, role)
+        ]
+
+        out["sections"].append({
+            **sec,
+            "boxes": boxes
+        })
+
     return out
 
 
