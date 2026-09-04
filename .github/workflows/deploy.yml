@@ -25,6 +25,7 @@ jobs:
             cd backend &&
             source .venv/bin/activate &&
             pip install -r requirements.txt &&
+            python -m playwright install chromium &&
             python migrate_publications.py &&
             deactivate &&
             cd ../frontend &&

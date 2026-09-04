@@ -39,12 +39,18 @@ def build_browser_pdf(url):
             device_scale_factor=1,
         )
 
-        page.goto(
+        response = page.goto(
             url,
             wait_until="networkidle",
         )
 
+        print("PDF BROWSER URL:", url)
+        print("PDF PAGE STATUS:", response.status if response else None)
+        print("PDF PAGE URL:", page.url)
+        print("PDF PAGE TITLE:", page.title())
+
         # Make sure the actual report has rendered.
+        print("PDF BODY:", (page.locator("body").inner_text())[:2000])
         page.wait_for_selector(".sheet", timeout=30000)
 
         # Give React/charts/fonts a moment to finish painting.
