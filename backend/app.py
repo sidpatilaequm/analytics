@@ -11,8 +11,9 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from functools import wraps
-
+from flask.json.provider import DefaultJSONProvider
 import jwt
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
@@ -22,6 +23,18 @@ import db
 import exporters
 import formula
 from querybuilder import BadDefinition, build, build_write, preview
+
+class _SafeJSONProvider(DefaultJSONProvider):
+    """MySQL hands back SUM()/AVG() as Decimal and dates as date/datetime —
+    neither of which the default JSON encoder knows how to serialize. Left
+    unhandled, that turns into a 500 with an HTML error page instead of
+    JSON, which is what breaks a page silently rather than showing an error."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, (date, datetime)):
+            return obj.isoformat()
+        return super().default(obj)
 
 app = Flask(__name__)
 CORS(

@@ -11,10 +11,36 @@ import api from "../api.js";
 import { StoreProvider, useStore } from "../store.jsx";
 import Canvas from "./Canvas.jsx";
 
+/* If one box's rendering throws for any reason, this stops it from taking
+   the whole published page down to a blank white screen — the person
+   sharing this link gets a message instead of nothing at all. */
+class Boundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="pane" style={{ maxWidth: 520, paddingTop: 100, textAlign: "center" }}>
+          <div className="wordmark" style={{ justifyContent: "center" }}><b>NEXD</b></div>
+          <p style={{ color: "var(--muted)", marginTop: 18 }}>
+            Something on this dashboard couldn't be shown.
+          </p>
+          <p className="fx bad" style={{ display: "inline-block", textAlign: "left" }}>
+            {String(this.state.error.message || this.state.error)}
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function PublicView({ slug }) {
   return (
     <StoreProvider>
-      <PublicShell slug={slug} />
+      <Boundary>
+        <PublicShell slug={slug} />
+      </Boundary>
     </StoreProvider>
   );
 }
