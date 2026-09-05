@@ -394,3 +394,13 @@ body.preview .help{display:none}
   margin-bottom:9px;width:100%}
 .fbrow input,.fbrow select{height:34px;box-sizing:border-box;width:100%;min-width:0}
 .fbrow select{text-align:center;text-align-last:center;padding:0 4px}
+@media print {
+  .public-report .export-actions {
+    display: none !important;
+  }
+
+  .public-report .box {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}

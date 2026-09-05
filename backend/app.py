@@ -506,7 +506,7 @@ def write_box(key):
 # exporting — PDF / PPTX / XLSX, all built from the same computed results
 # --------------------------------------------------------------------------
 EXPORT_KINDS = {
-    "pdf": ("application/pdf", exporters.build_pdf, "pdf"),
+    "pdf": ("application/pdf", exporters.build_browser_pdf, "pdf"),
     "pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",
              exporters.build_pptx, "pptx"),
     "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

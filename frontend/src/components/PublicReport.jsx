@@ -230,9 +230,11 @@ function PublicSection({ section, index }) {
 
   return (
     <div
-      className={`sec${section.frame?.on ? " framed" : ""}`}
-      style={frameStyle(section.frame)}
-    >
+      className="grid"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+    }}
+  >
       {nameVisible && (
         <>
           <div
@@ -280,6 +282,7 @@ function PublicSection({ section, index }) {
         className="grid"
         style={{
           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          breakInside: "auto",
         }}
       >
         {section.boxes

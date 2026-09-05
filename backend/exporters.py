@@ -13,14 +13,24 @@ from pptx.enum.shapes import MSO_SHAPE
 # --------------------------------------------------------------------------
 # BROWSER PDF
 # --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# PDF
+# --------------------------------------------------------------------------
 def build_browser_pdf(url):
     """
-    Generate a PDF from the actual published React report page.
+    Generate a PDF from the actual rendered published React report.
 
-    This uses the browser-rendered page instead of rebuilding the report
-    with ReportLab, so the PDF matches the published UI.
+    The dashboard is rendered using normal screen CSS so the grid,
+    box sizes and alignment remain identical to the published page.
+
+    The rendered dashboard is captured at high resolution and then
+    placed into an A4 PDF at 300 DPI for sharp text and charts.
     """
+
     from playwright.sync_api import sync_playwright
+    from PIL import Image
+    import io
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -31,12 +41,14 @@ def build_browser_pdf(url):
             ],
         )
 
+        # Keep the same desktop layout as the published dashboard.
+        # Higher device scale factor = higher resolution screenshot.
         page = browser.new_page(
             viewport={
                 "width": 1440,
                 "height": 900,
             },
-            device_scale_factor=1,
+            device_scale_factor=3,
         )
 
         response = page.goto(
@@ -45,199 +57,153 @@ def build_browser_pdf(url):
         )
 
         print("PDF BROWSER URL:", url)
-        print("PDF PAGE STATUS:", response.status if response else None)
+        print(
+            "PDF PAGE STATUS:",
+            response.status if response else None
+        )
         print("PDF PAGE URL:", page.url)
-        print("PDF PAGE TITLE:", page.title())
 
-        # Make sure the actual report has rendered.
-        print("PDF BODY:", (page.locator("body").inner_text())[:2000])
-        page.wait_for_selector(".sheet", timeout=30000)
-
-        # Give React/charts/fonts a moment to finish painting.
-        page.wait_for_timeout(1000)
-
-        pdf = page.pdf(
-            format="A4",
-            print_background=True,
-            prefer_css_page_size=True,
-            margin={
-                "top": "0",
-                "right": "0",
-                "bottom": "0",
-                "left": "0",
-            },
+        page.wait_for_selector(
+            ".sheet",
+            timeout=30000,
         )
 
+        # Wait for React/charts/fonts.
+        page.wait_for_timeout(1500)
+
+        page.evaluate(
+            """
+            async () => {
+                if (document.fonts) {
+                    await document.fonts.ready;
+                }
+            }
+            """
+        )
+
+        # Hide download buttons only.
+        page.add_style_tag(
+            content="""
+                .export-actions {
+                    display: none !important;
+                }
+            """
+        )
+
+        # --------------------------------------------------------------
+        # Capture the EXACT rendered dashboard.
+        # --------------------------------------------------------------
+
+        sheet = page.locator(".sheet")
+
+        dimensions = sheet.evaluate(
+            """
+            el => {
+                const r = el.getBoundingClientRect();
+
+                return {
+                    x: r.x,
+                    y: r.y,
+                    width: r.width,
+                    height: r.height
+                };
+            }
+            """
+        )
+
+        print("PDF SHEET CSS DIMENSIONS:", dimensions)
+
+        screenshot = sheet.screenshot(
+            type="png",
+            animations="disabled",
+        )
+
+        # Close browser only after screenshot is captured.
         browser.close()
 
-        return pdf
+    # --------------------------------------------------------------
+    # Convert screenshot to high-resolution A4 pages.
+    #
+    # A4 @ 300 DPI:
+    #   8.27in × 300 = 2480 px
+    #   11.69in × 300 = 3508 px
+    # --------------------------------------------------------------
 
+    image = Image.open(
+        io.BytesIO(screenshot)
+    ).convert("RGB")
 
-# --------------------------------------------------------------------------
-# PDF
-# --------------------------------------------------------------------------
-def build_pdf(name, sections):
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import (
-        Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    print("PDF SCREENSHOT PIXELS:", image.size)
+
+    A4_WIDTH = 2480
+    A4_HEIGHT = 3508
+
+    # Preserve exact aspect ratio.
+    scale = A4_WIDTH / image.width
+
+    scaled_width = A4_WIDTH
+    scaled_height = round(image.height * scale)
+
+    image = image.resize(
+        (scaled_width, scaled_height),
+        Image.Resampling.LANCZOS,
     )
 
-    buf = io.BytesIO()
-
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        topMargin=40,
-        bottomMargin=40,
-        leftMargin=40,
-        rightMargin=40,
+    print(
+        "PDF SCALED IMAGE:",
+        image.size
     )
 
-    styles = getSampleStyleSheet()
-    body = styles["BodyText"]
+    # --------------------------------------------------------------
+    # Split dashboard into A4 pages.
+    # --------------------------------------------------------------
 
-    title_style = ParagraphStyle(
-        "T",
-        parent=styles["Title"],
-        fontSize=20,
+    pages = []
+
+    for top in range(0, scaled_height, A4_HEIGHT):
+
+        bottom = min(
+            top + A4_HEIGHT,
+            scaled_height,
+        )
+
+        page_image = Image.new(
+            "RGB",
+            (A4_WIDTH, A4_HEIGHT),
+            "white",
+        )
+
+        crop = image.crop(
+            (
+                0,
+                top,
+                scaled_width,
+                bottom,
+            )
+        )
+
+        page_image.paste(
+            crop,
+            (0, 0),
+        )
+
+        pages.append(page_image)
+
+    # --------------------------------------------------------------
+    # Generate PDF at 300 DPI.
+    # --------------------------------------------------------------
+
+    output = io.BytesIO()
+
+    pages[0].save(
+        output,
+        format="PDF",
+        resolution=300.0,
+        save_all=True,
+        append_images=pages[1:],
     )
 
-    h2 = ParagraphStyle(
-        "H2",
-        parent=styles["Heading2"],
-        spaceBefore=16,
-        fontSize=14,
-    )
-
-    err_style = ParagraphStyle(
-        "E",
-        parent=body,
-        textColor=colors.HexColor("#9E332B"),
-    )
-
-    story = [
-        Paragraph(_esc(name), title_style),
-        Spacer(1, 10),
-    ]
-
-    for sec in sections:
-        story.append(Paragraph(_esc(sec["name"]), h2))
-
-        if sec.get("desc"):
-            story.append(Paragraph(_esc(sec["desc"]), body))
-
-        story.append(Spacer(1, 6))
-
-        for box in sec["boxes"]:
-
-            if box.get("error"):
-                story.append(
-                    Paragraph(_esc(box["error"]), err_style)
-                )
-
-            elif box["kind"] == "value":
-
-                card_data = [
-                    [
-                        Paragraph(
-                            f"<b>{_esc(box['title'] or 'Untitled')}</b>",
-                            ParagraphStyle(
-                                "CardTitle",
-                                parent=body,
-                                fontSize=11,
-                                textColor=colors.HexColor("#5A6663"),
-                                spaceAfter=8,
-                            ),
-                        )
-                    ],
-                    [
-                        Paragraph(
-                            _esc(box.get("text", "—")),
-                            ParagraphStyle(
-                                "CardValue",
-                                parent=body,
-                                fontSize=24,
-                                leading=28,
-                                alignment=1,
-                                fontName="Helvetica-Bold",
-                            ),
-                        )
-                    ],
-                ]
-
-                if box.get("note"):
-                    card_data.append([
-                        Paragraph(
-                            _esc(box["note"]),
-                            ParagraphStyle(
-                                "CardNote",
-                                parent=body,
-                                fontSize=8,
-                                textColor=colors.grey,
-                                alignment=1,
-                            ),
-                        )
-                    ])
-
-                card = Table(
-                    card_data,
-                    colWidths=[480],
-                    hAlign="LEFT",
-                )
-
-                card.setStyle(
-                    TableStyle([
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                        ("BOX", (0, 0), (-1, -1), 1,
-                         colors.HexColor("#D5DDDA")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 12),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 14),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-                    ])
-                )
-
-                story.append(card)
-
-            elif box["kind"] in ("chart", "table") and box.get("rows"):
-
-                rows = [
-                    [_cell(v) for v in r]
-                    for r in box["rows"]
-                ]
-
-                t = Table(rows, hAlign="LEFT")
-
-                t.setStyle(
-                    TableStyle([
-                        ("BACKGROUND", (0, 0), (-1, 0),
-                         colors.HexColor("#E7ECEA")),
-                        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                        ("GRID", (0, 0), (-1, -1), 0.4,
-                         colors.HexColor("#D5DDDA")),
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 3),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                    ])
-                )
-
-                story.append(t)
-
-            elif box["kind"] == "note" and box.get("text"):
-
-                story.append(
-                    Paragraph(_esc(box["text"]), body)
-                )
-
-            story.append(Spacer(1, 10))
-
-        story.append(Spacer(1, 14))
-
-    doc.build(story)
-
-    return buf.getvalue()
+    return output.getvalue()
 
 
 def _esc(s):
