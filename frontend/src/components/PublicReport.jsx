@@ -229,12 +229,7 @@ function PublicSection({ section, index }) {
   };
 
   return (
-    <div
-      className="grid"
-      style={{
-        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-    }}
-  >
+  <div className="sec">
       {nameVisible && (
         <>
           <div
