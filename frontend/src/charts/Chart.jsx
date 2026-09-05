@@ -829,7 +829,9 @@ export default function Chart({ data, cfg = {} }) {
    a line or area names its series. */
 
 export function legendItems(data, cfg) {
-  const pal = PALETTE.slice(cfg.palette || 0).concat(PALETTE);
+  const pal = PALETTE
+    .slice(cfg.palette || 0)
+    .concat(PALETTE);
 
   if (["line", "area"].includes(cfg.type)) {
     return [
@@ -840,10 +842,25 @@ export function legendItems(data, cfg) {
     ];
   }
 
-  return data.map((d, i) => ({
-    label: String(d.label),
-    color: pal[i % pal.length],
-  }));
+  const total =
+    data.reduce(
+      (sum, d) => sum + Math.abs(Number(d.value) || 0),
+      0
+    ) || 1;
+
+  return data.map((d, i) => {
+    const value = Math.abs(Number(d.value) || 0);
+
+    const percentage =
+      (value / total) * 100;
+
+    return {
+      label: String(d.label),
+      value,
+      percentage,
+      color: pal[i % pal.length],
+    };
+  });
 }
 
 export const Legend = ({

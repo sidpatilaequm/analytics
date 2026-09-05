@@ -96,6 +96,7 @@ export default function Box({ box, cols }) {
       {box.titleVisible !== false && (
         <Editable className="box-title" value={box.title} placeholder="Unnamed box"
           style={styleObj(normS(box.titleStyle))}
+          editable={design}
           onChange={(v) => set("title", v)} />
       )}
 
@@ -197,8 +198,71 @@ function Body({ box }) {
   }
 
   if (box.kind === "chart") {
-    const c = box.chart;
-    const data = result?.data || [];
+  const c = box.chart;
+
+  let data = [];
+
+  /*
+   * ----------------------------------------------------------
+   * VALUE BOX SOURCE
+   * ----------------------------------------------------------
+   */
+
+  if (c.source === "value_boxes") {
+    const selected = c.valueBoxes || [];
+
+    const allValueBoxes = state.doc.sections
+      .flatMap((section) => section.boxes || []);
+
+    data = selected
+      .map((id) => {
+        const valueBox = allValueBoxes.find(
+          (b) => b.id === id
+        );
+
+        if (!valueBox) return null;
+
+        const valueResult =
+          state.results[valueBox.id];
+
+        let value;
+
+        /*
+         * Manual value
+         */
+        if (valueBox.value?.source === "manual") {
+          value = Number(valueBox.value.manual);
+        } else {
+          value = Number(valueResult?.value);
+        }
+
+        if (!Number.isFinite(value)) {
+          value = 0;
+        }
+
+        return {
+          label: valueBox.title || "Unnamed value",
+          value,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * NORMAL DATABASE CHART
+   * ----------------------------------------------------------
+   */
+
+  else {
+    data = result?.data || [];
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * EMPTY STATE
+   * ----------------------------------------------------------
+   */
     if (!data.length) {
       const [msg, sub] = stateNote(box, state.catalog);
       const label = (CHARTS.find((x) => x[0] === c.type) || ["", "Chart"])[1];
@@ -208,7 +272,13 @@ function Body({ box }) {
     return (
       <div className={`chartwrap lp-${pos}`}>
         <div className="chartsvg"><Chart data={data} cfg={c} /></div>
-        {c.legend && <Legend items={legendItems(data, c)} position={pos} />}
+        {c.legend && (
+          <Legend
+            items={legendItems(data, c)}
+            position={pos}
+            showValues={c.type === "donut"}
+          />
+        )}
       </div>
     );
   }
@@ -750,41 +820,192 @@ function ValueFormat({ box, set }) {
 function ChartData({ box, set }) {
   const { state } = useStore();
   const c = box.chart;
+
   const cols = colOptions(state.catalog, box.src).map((x) => x.name);
+
+  // All value boxes in the report except the current graph box.
+  const valueBoxes = state.doc.sections
+    .flatMap((section) => section.boxes || [])
+    .filter(
+      (b) =>
+        b.kind === "value" &&
+        b.id !== box.id &&
+        b.visible !== false
+    );
+
+  const selectedValueBoxes = c.valueBoxes || [];
+
+  const toggleValueBox = (id) => {
+    const next = selectedValueBoxes.includes(id)
+      ? selectedValueBoxes.filter((x) => x !== id)
+      : [...selectedValueBoxes, id];
+
+    set("chart.valueBoxes", next);
+  };
+
   return (
     <>
       <Group>Chart</Group>
-      <Chips value={c.type} options={CHARTS} onChange={(v) => set("chart.type", v)} />
-      <Row style={{ marginTop: 9 }}>
-        <Field label="Group by">
-          <Select value={c.category} options={cols} onChange={(v) => set("chart.category", v)} />
-        </Field>
-        <Field label="Aggregate">
-          <Select value={c.agg} options={AGGS} onChange={(v) => set("chart.agg", v)} />
-        </Field>
-        <Field label="Of column">
-          <Select value={c.column} options={cols} onChange={(v) => set("chart.column", v)} />
-        </Field>
-      </Row>
-      <Row>
-        <Field label="Sort by">
-          <Select value={c.sort} options={[["value", "Value"], ["label", "Name"]]}
-            onChange={(v) => set("chart.sort", v)} />
-        </Field>
-        <Field label="Order">
-          <Select value={c.dir} options={[["desc", "High → low"], ["asc", "Low → high"]]}
-            onChange={(v) => set("chart.dir", v)} />
-        </Field>
-        <Field label="Keep top">
-          <Select value={c.limit} numeric options={[[0, "All"], 5, 6, 8, 10, 12]}
-            onChange={(v) => set("chart.limit", v)} />
-        </Field>
-      </Row>
-      <SourceEditor box={box} />
+
+      <Chips
+        value={c.type}
+        options={CHARTS}
+        onChange={(v) => set("chart.type", v)}
+      />
+
+      {/* ---------------------------------------------------------
+          DONUT / VALUE BOX MODE
+         --------------------------------------------------------- */}
+
+      {c.type === "donut" && (
+        <>
+          <Row style={{ marginTop: 9 }}>
+            <Field label="Data source">
+              <Select
+                value={c.source || "database"}
+                options={[
+                  ["database", "Query data"],
+                  ["value_boxes", "Value boxes"],
+                ]}
+                onChange={(v) => set("chart.source", v)}
+              />
+            </Field>
+          </Row>
+
+          {c.source === "value_boxes" && (
+            <>
+              <Group>Value boxes</Group>
+
+              {!valueBoxes.length && (
+                <Hint>
+                  Add Value boxes to this report first.
+                </Hint>
+              )}
+
+              {valueBoxes.map((vb) => (
+                <label
+                  key={vb.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "7px 0",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedValueBoxes.includes(vb.id)}
+                    onChange={() => toggleValueBox(vb.id)}
+                  />
+
+                  <span>
+                    {vb.title || "Unnamed value"}
+                  </span>
+                </label>
+              ))}
+
+              {selectedValueBoxes.length > 0 && (
+                <Hint>
+                  The donut will use the current values of the
+                  selected Value boxes.
+                </Hint>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ---------------------------------------------------------
+          EXISTING DATABASE CHART
+         --------------------------------------------------------- */}
+
+      {c.source !== "value_boxes" && (
+        <>
+          <Row style={{ marginTop: 9 }}>
+            <Field label="Group by">
+              <Select
+                value={c.category}
+                options={cols}
+                onChange={(v) =>
+                  set("chart.category", v)
+                }
+              />
+            </Field>
+
+            <Field label="Aggregate">
+              <Select
+                value={c.agg}
+                options={AGGS}
+                onChange={(v) =>
+                  set("chart.agg", v)
+                }
+              />
+            </Field>
+
+            <Field label="Of column">
+              <Select
+                value={c.column}
+                options={cols}
+                onChange={(v) =>
+                  set("chart.column", v)
+                }
+              />
+            </Field>
+          </Row>
+
+          <Row>
+            <Field label="Sort by">
+              <Select
+                value={c.sort}
+                options={[
+                  ["value", "Value"],
+                  ["label", "Name"],
+                ]}
+                onChange={(v) =>
+                  set("chart.sort", v)
+                }
+              />
+            </Field>
+
+            <Field label="Order">
+              <Select
+                value={c.dir}
+                options={[
+                  ["desc", "High → low"],
+                  ["asc", "Low → high"],
+                ]}
+                onChange={(v) =>
+                  set("chart.dir", v)
+                }
+              />
+            </Field>
+
+            <Field label="Keep top">
+              <Select
+                value={c.limit}
+                numeric
+                options={[
+                  [0, "All"],
+                  5,
+                  6,
+                  8,
+                  10,
+                  12,
+                ]}
+                onChange={(v) =>
+                  set("chart.limit", v)
+                }
+              />
+            </Field>
+          </Row>
+
+          <SourceEditor box={box} />
+        </>
+      )}
     </>
   );
 }
-
 function ChartFormat({ box, set }) {
   const c = box.chart;
   return (
@@ -805,6 +1026,12 @@ function ChartFormat({ box, set }) {
         <Check on={c.values} label="Show values" onChange={(v) => set("chart.values", v)} />
         <Check on={c.legend} label="Legend" onChange={(v) => set("chart.legend", v)} />
       </Toggles>
+      {c.type === "donut" && (
+        <Hint>
+          Donut shows the main percentage in the centre.
+          The legend shows each category's value and percentage.
+        </Hint>
+      )}
       {c.legend && (
         <Row>
           <Field label="Legend sits">

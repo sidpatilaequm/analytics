@@ -96,10 +96,29 @@ export function ensureConfigs(b) {
     fLeft: "", fOp: "/", fRight: "", fExtra: "", round: 2,
   };
   if (!b.chart) b.chart = {
-    type: "bar", category: "", agg: "COUNT", column: "", legendPos: "bottom",
-    limit: 8, sort: "value", dir: "desc", height: 220,
-    legend: true, grid: true, values: false, palette: 0,
-  };
+  type: "bar",
+
+  // Database = existing chart behaviour
+  // values = build chart from existing Value boxes
+  source: "database",
+
+  category: "",
+  agg: "COUNT",
+  column: "",
+
+  // Value-box based charts
+  valueBoxes: [],
+
+  legendPos: "bottom",
+  limit: 8,
+  sort: "value",
+  dir: "desc",
+  height: 220,
+  legend: true,
+  grid: true,
+  values: false,
+  palette: 0,
+};
   if (!b.table) b.table = {
     columns: [], limit: 8, sort: "", dir: "asc", zebra: true, totals: false, headStyle: S(),
   };
