@@ -819,21 +819,33 @@ function ValueFormat({ box, set }) {
 /* ---- chart ---- */
 function ChartData({ box, set }) {
   const { state } = useStore();
-  const c = box.chart;
+  const c = box.chart || {};
 
   const cols = colOptions(state.catalog, box.src).map((x) => x.name);
 
-  // All value boxes in the report except the current graph box.
+  /*
+   * Every Value box in the report except the current Graph box.
+   *
+   * IMPORTANT:
+   * The value stored in chart.valueBoxes is the BOX ID.
+   * The title is only for display.
+   */
   const valueBoxes = state.doc.sections
-    .flatMap((section) => section.boxes || [])
+    .flatMap((section) =>
+      (section.boxes || []).map((b) => ({
+        ...b,
+        sectionName: section.name || "Unnamed section",
+      }))
+    )
     .filter(
       (b) =>
         b.kind === "value" &&
-        b.id !== box.id &&
-        b.visible !== false
+        b.id !== box.id
     );
 
-  const selectedValueBoxes = c.valueBoxes || [];
+  const selectedValueBoxes = Array.isArray(c.valueBoxes)
+    ? c.valueBoxes
+    : [];
 
   const toggleValueBox = (id) => {
     const next = selectedValueBoxes.includes(id)
@@ -841,6 +853,34 @@ function ChartData({ box, set }) {
       : [...selectedValueBoxes, id];
 
     set("chart.valueBoxes", next);
+  };
+
+  const getBoxValue = (b) => {
+    if (b.value?.source === "manual") {
+      const n = Number(b.value.manual);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    const result = state.results[b.id];
+
+    const n = Number(result?.value);
+
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const formatBoxValue = (b) => {
+    const value = getBoxValue(b);
+
+    if (value === null) return "—";
+
+    const decimals = Number.isInteger(b.value?.decimals)
+      ? b.value.decimals
+      : 0;
+
+    const suffix = b.value?.suffix || "";
+    const prefix = b.value?.prefix || "";
+
+    return `${prefix}${value.toFixed(decimals)}${suffix}`;
   };
 
   return (
@@ -853,74 +893,114 @@ function ChartData({ box, set }) {
         onChange={(v) => set("chart.type", v)}
       />
 
-      {/* ---------------------------------------------------------
-          DONUT / VALUE BOX MODE
-         --------------------------------------------------------- */}
+      <Row style={{ marginTop: 9 }}>
+        <Field label="Data source">
+          <Select
+            value={c.source || "database"}
+            options={[
+              ["database", "Query data"],
+              ["value_boxes", "Value boxes"],
+            ]}
+            onChange={(v) => set("chart.source", v)}
+          />
+        </Field>
+      </Row>
 
-      {c.type === "donut" && (
+      {c.source === "value_boxes" ? (
         <>
-          <Row style={{ marginTop: 9 }}>
-            <Field label="Data source">
-              <Select
-                value={c.source || "database"}
-                options={[
-                  ["database", "Query data"],
-                  ["value_boxes", "Value boxes"],
-                ]}
-                onChange={(v) => set("chart.source", v)}
-              />
-            </Field>
-          </Row>
+          <Group>Value boxes</Group>
 
-          {c.source === "value_boxes" && (
-            <>
-              <Group>Value boxes</Group>
+          <Hint>
+            Select the existing Value boxes that should become
+            the chart's categories.
+          </Hint>
 
-              {!valueBoxes.length && (
-                <Hint>
-                  Add Value boxes to this report first.
-                </Hint>
-              )}
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 7,
+            }}
+          >
+            {valueBoxes.length === 0 ? (
+              <Hint>No Value boxes available.</Hint>
+            ) : (
+              valueBoxes.map((b) => {
+                const checked =
+                  selectedValueBoxes.includes(b.id);
 
-              {valueBoxes.map((vb) => (
-                <label
-                  key={vb.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "7px 0",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedValueBoxes.includes(vb.id)}
-                    onChange={() => toggleValueBox(vb.id)}
-                  />
+                return (
+                  <label
+                    key={b.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleValueBox(b.id)}
+                    />
 
-                  <span>
-                    {vb.title || "Unnamed value"}
-                  </span>
-                </label>
-              ))}
+                    <span>
+                      <b>
+                        {b.title || "Unnamed value"}
+                      </b>
 
-              {selectedValueBoxes.length > 0 && (
-                <Hint>
-                  The donut will use the current values of the
-                  selected Value boxes.
-                </Hint>
-              )}
-            </>
-          )}
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: 11,
+                          color: "#6B7A78",
+                        }}
+                      >
+                        {formatBoxValue(b)}
+                        {" · "}
+                        {b.sectionName}
+                        {" · "}
+                        {b.id}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+
+          {selectedValueBoxes.length > 0 && (
+            <Hint style={{ marginTop: 8 }}>
+              <b>
+                {selectedValueBoxes.length} Value box
+                {selectedValueBoxes.length > 1 ? "es" : ""} selected:
+              </b>
+
+            <div style={{ marginTop: 6 }}>
+              {selectedValueBoxes.map((id) => {
+                const b = valueBoxes.find((x) => x.id === id);
+
+                return (
+                  <div key={id}>
+                    • {b?.title || "Unnamed value box"}
+                    {b && (
+                      <span style={{ fontSize: 11, color: "#6B7A78" }}>
+                        {" · "}
+                        {formatBoxValue(b)}
+                        {" · "}
+                        {b.sectionName}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Hint>
+        )}
         </>
-      )}
-
-      {/* ---------------------------------------------------------
-          EXISTING DATABASE CHART
-         --------------------------------------------------------- */}
-
-      {c.source !== "value_boxes" && (
+      ) : (
         <>
           <Row style={{ marginTop: 9 }}>
             <Field label="Group by">

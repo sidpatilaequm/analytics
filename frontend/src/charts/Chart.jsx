@@ -53,51 +53,89 @@ export default function Chart({ data, cfg = {} }) {
     let a0 = -Math.PI / 2;
 
     const slices = data.map((d, i) => {
-      const value = Math.abs(values[i]);
+  const value = Math.abs(values[i]);
 
-      const a1 =
-        a0 +
-        (value / total) *
-          Math.PI *
-          2;
+  if (value <= 0) return null;
 
-      const big =
-        a1 - a0 > Math.PI ? 1 : 0;
+  const ratio = value / total;
 
-      const p = (rr, a) => [
-        cx + rr * Math.cos(a),
-        cy + rr * Math.sin(a),
-      ];
-
-      const [x1, y1] = p(R, a0);
-      const [x2, y2] = p(R, a1);
-
-      const [x3, y3] = p(r0, a1);
-      const [x4, y4] = p(r0, a0);
-
-      const dd =
-        `M${x1} ${y1}` +
-        `A${R} ${R} 0 ${big} 1 ${x2} ${y2}` +
-        (
-          r0
-            ? `L${x3} ${y3}` +
-              `A${r0} ${r0} 0 ${big} 0 ${x4} ${y4}`
-            : `L${cx} ${cy}`
-        ) +
-        "Z";
-
-      a0 = a1;
+  /*
+   * A 100% slice cannot be drawn correctly using an SVG arc
+   * because start angle and end angle become identical.
+   * Draw a real circle/ring instead.
+   */
+  if (ratio >= 0.999999) {
+    if (cfg.type === "donut") {
+      const ringR = (R + r0) / 2;
+      const ringWidth = R - r0;
 
       return (
-        <path
+        <circle
           key={i}
-          d={dd}
-          fill={pal[i % pal.length]}
-          stroke="#fff"
-          strokeWidth="1.5"
+          cx={cx}
+          cy={cy}
+          r={ringR}
+          fill="none"
+          stroke={pal[i % pal.length]}
+          strokeWidth={ringWidth}
         />
       );
-    });
+    }
+
+    return (
+      <circle
+        key={i}
+        cx={cx}
+        cy={cy}
+        r={R}
+        fill={pal[i % pal.length]}
+      />
+    );
+  }
+
+  const a1 =
+    a0 +
+    ratio *
+      Math.PI *
+      2;
+
+  const big =
+    a1 - a0 > Math.PI ? 1 : 0;
+
+  const p = (rr, a) => [
+    cx + rr * Math.cos(a),
+    cy + rr * Math.sin(a),
+  ];
+
+  const [x1, y1] = p(R, a0);
+  const [x2, y2] = p(R, a1);
+
+  const [x3, y3] = p(r0, a1);
+  const [x4, y4] = p(r0, a0);
+
+  const dd =
+    `M${x1} ${y1}` +
+    `A${R} ${R} 0 ${big} 1 ${x2} ${y2}` +
+    (
+      r0
+        ? `L${x3} ${y3}` +
+          `A${r0} ${r0} 0 ${big} 0 ${x4} ${y4}`
+        : `L${cx} ${cy}`
+    ) +
+    "Z";
+
+  a0 = a1;
+
+  return (
+    <path
+      key={i}
+      d={dd}
+      fill={pal[i % pal.length]}
+      stroke="#fff"
+      strokeWidth="1.5"
+    />
+  );
+});
 
     /* ------------------------------------------------------------
        DATA-DRIVEN DONUT CENTER
@@ -866,6 +904,7 @@ export function legendItems(data, cfg) {
 export const Legend = ({
   items,
   position,
+  showValues = false,
 }) => (
   <div
     className={`legend${
@@ -874,18 +913,33 @@ export const Legend = ({
         : ""
     }`}
   >
-    {items.map(
-      (d, i) => (
-        <span key={i}>
-          <i
-            style={{
-              background:
-                d.color,
-            }}
-          />
+    {items.map((d, i) => (
+      <span key={i}>
+        <i
+          style={{
+            background: d.color,
+          }}
+        />
+
+        <span>
           {d.label}
+
+          {showValues &&
+            d.value !== undefined && (
+              <>
+                {" "}
+                <b>
+                  {short(d.value)}
+                </b>
+
+                <small>
+                  {" "}
+                  ({d.percentage.toFixed(0)}%)
+                </small>
+              </>
+            )}
         </span>
-      )
-    )}
+      </span>
+    ))}
   </div>
 );
